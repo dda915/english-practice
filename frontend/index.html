@@ -404,10 +404,10 @@
     </div>
 
     <div class="card no-print">
-      <div class="config-row">
-        <span class="config-label">&#x51FA;&#x984C;&#x6570;</span>
+      <div class="config-row" x-show="parentMode">
+        <span class="config-label">出題数</span>
         <input type="number" class="config-input" x-model.number="batchSize" min="1" max="50">
-        <span style="font-size:13px; color:var(--text-sub)">&#x554F;</span>
+        <span style="font-size:13px; color:var(--text-sub)">問</span>
       </div>
       <div x-show="hasActiveSession && currentBatch.length === 0" style="margin-bottom:12px; padding:12px 16px; background:var(--gold-bg); border:1px solid var(--gold-border); border-radius:var(--radius); font-size:13px;">
         前回の続きがあります（残り <span x-text="sessionRemaining"></span>/<span x-text="sessionTotal"></span> 問）
