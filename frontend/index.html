@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>和文英訳トレーニング</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4f0;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --text-sub: #6b6560;
+    --accent: #2d5a27;
+    --accent-light: #e8f0e6;
+    --correct: #2d5a27;
+    --correct-bg: #e8f0e6;
+    --wrong: #a63d2f;
+    --wrong-bg: #fce8e5;
+    --border: #e0dcd7;
+    --border-light: #eeebe7;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --radius: 8px;
+    --gold: #b8860b;
+    --gold-bg: #fdf6e3;
+    --gold-border: #e8d5a3;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* ── Nav ── */
+  .nav {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 56px;
+  }
+  .nav-title {
+    font-weight: 700; font-size: 15px;
+    letter-spacing: 0.02em; color: var(--accent); white-space: nowrap;
+  }
+  .nav-tabs {
+    display: flex; gap: 2px; height: 100%; align-items: stretch;
+  }
+  .nav-tab {
+    display: flex; align-items: center; padding: 0 12px;
+    font-size: 13px; font-weight: 500; color: var(--text-sub);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.15s; user-select: none;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Child switcher */
+  .child-switcher {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .child-select {
+    appearance: none;
+    background: var(--accent-light);
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    padding: 5px 28px 5px 12px;
+    font-size: 13px; font-weight: 600;
+    color: var(--accent);
+    font-family: inherit;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%232d5a27'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: all 0.15s;
+  }
+  .child-select:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-light); }
+  .nav-points {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--gold-bg); border: 1px solid var(--gold-border);
+    border-radius: 20px; padding: 4px 14px 4px 10px;
+    font-size: 13px; font-weight: 600; color: var(--gold);
+    white-space: nowrap; cursor: pointer; transition: all 0.15s;
+  }
+  .nav-points:hover { background: #f9efd4; }
+
+  /* ── Main ── */
+  .main { max-width: 960px; margin: 0 auto; padding: 32px 24px 80px; }
+  .page-header { margin-bottom: 28px; }
+  .page-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .page-header p { font-size: 13.5px; color: var(--text-sub); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 24px; margin-bottom: 16px;
+  }
+
+  .stats-bar { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+  .stat-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 20px; flex: 1; min-width: 100px;
+  }
+  .stat-item.gold { background: var(--gold-bg); border-color: var(--gold-border); }
+  .stat-label {
+    font-size: 11.5px; color: var(--text-sub); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;
+  }
+  .stat-item.gold .stat-label { color: var(--gold); }
+  .stat-value { font-size: 24px; font-weight: 700; color: var(--text); }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.gold { color: var(--gold); }
+
+  .q-item { padding: 16px 0; border-bottom: 1px solid var(--border-light); }
+  .q-item:last-child { border-bottom: none; }
+  .q-number { font-size: 11px; font-weight: 600; color: var(--text-sub); margin-bottom: 4px; letter-spacing: 0.05em; }
+  .q-japanese { font-size: 15px; font-weight: 500; line-height: 1.8; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 20px; border-radius: 6px; font-size: 13.5px;
+    font-weight: 600; border: none; cursor: pointer;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: #234a1e; }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-outline:hover:not(:disabled) { background: var(--border-light); }
+  .btn-gold { background: var(--gold); color: #fff; }
+  .btn-gold:hover:not(:disabled) { background: #9a7209; }
+  .btn-sm { padding: 6px 14px; font-size: 12.5px; }
+
+  .score-row { display: flex; align-items: flex-start; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border-light); }
+  .score-row:last-child { border-bottom: none; }
+  .score-text { flex: 1; }
+  .score-buttons { display: flex; gap: 6px; flex-shrink: 0; padding-top: 2px; }
+  .score-btn {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 2px solid var(--border); background: var(--card);
+    cursor: pointer; font-size: 16px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .score-btn:hover { border-color: var(--text-sub); }
+  .score-btn.correct { background: var(--correct-bg); border-color: var(--correct); color: var(--correct); }
+  .score-btn.wrong { background: var(--wrong-bg); border-color: var(--wrong); color: var(--wrong); }
+
+  .history-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .history-table th {
+    text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border);
+    font-weight: 600; font-size: 12px; color: var(--text-sub);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .history-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); vertical-align: top; }
+  .history-table tr:hover td { background: #faf9f7; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-clear { background: var(--correct-bg); color: var(--correct); }
+  .badge-pending { background: #fef3cd; color: #856404; }
+  .badge-correct { background: var(--correct-bg); color: var(--correct); }
+  .badge-wrong { background: var(--wrong-bg); color: var(--wrong); }
+  .history-dots { display: flex; gap: 3px; flex-wrap: wrap; }
+  .history-dot {
+    width: 18px; height: 18px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+  }
+
+  .progress-track { height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s ease; }
+
+  .answer-text {
+    font-family: 'Source Serif 4', serif; font-size: 15px;
+    color: var(--accent); font-style: italic; margin-top: 6px; line-height: 1.6;
+  }
+
+  .point-balance-card {
+    background: linear-gradient(135deg, #fdf6e3 0%, #fef9ec 100%);
+    border: 1px solid var(--gold-border); border-radius: var(--radius);
+    padding: 28px; margin-bottom: 24px; text-align: center;
+  }
+  .point-balance-label { font-size: 12px; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .point-balance-value { font-size: 48px; font-weight: 700; color: var(--gold); line-height: 1.2; }
+  .point-balance-unit { font-size: 18px; font-weight: 500; color: #c4a035; margin-left: 4px; }
+
+  .exchange-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 600px) { .exchange-grid { grid-template-columns: 1fr; } }
+  .exchange-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; text-align: center;
+  }
+  .exchange-icon { font-size: 32px; margin-bottom: 8px; }
+  .exchange-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .exchange-rate { font-size: 12px; color: var(--text-sub); margin-bottom: 16px; }
+  .exchange-input-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
+  .exchange-input {
+    width: 70px; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 16px; font-family: inherit; text-align: center;
+  }
+  .exchange-input:focus { outline: none; border-color: var(--gold); }
+  .exchange-result { font-size: 13px; color: var(--text-sub); margin-bottom: 12px; min-height: 20px; }
+
+  .point-log-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border-light); font-size: 13.5px;
+  }
+  .point-log-item:last-child { border-bottom: none; }
+  .point-log-icon {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .point-log-icon.earn { background: var(--correct-bg); color: var(--correct); }
+  .point-log-icon.spend { background: var(--wrong-bg); color: var(--wrong); }
+  .point-log-detail { flex: 1; }
+  .point-log-desc { font-weight: 500; font-size: 13px; }
+  .point-log-date { font-size: 11.5px; color: var(--text-sub); }
+  .point-log-amount { font-weight: 700; font-size: 14px; white-space: nowrap; }
+  .point-log-amount.earn { color: var(--correct); }
+  .point-log-amount.spend { color: var(--wrong); }
+
+  .filter-tabs {
+    display: flex; gap: 4px; margin-bottom: 20px;
+    background: var(--border-light); border-radius: 6px; padding: 3px; width: fit-content;
+  }
+  .filter-tab {
+    padding: 6px 14px; border-radius: 4px; font-size: 12.5px;
+    font-weight: 500; cursor: pointer; color: var(--text-sub);
+    transition: all 0.15s; user-select: none;
+  }
+  .filter-tab.active { background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+
+  .config-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .config-label { font-size: 13px; font-weight: 500; color: var(--text-sub); min-width: 80px; }
+  .config-input {
+    width: 70px; padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 14px; font-family: inherit; text-align: center;
+  }
+  .config-input:focus { outline: none; border-color: var(--accent); }
+
+  .clear-toast {
+    position: fixed; top: 80px; right: 24px;
+    background: var(--gold-bg); border: 1px solid var(--gold-border);
+    border-radius: var(--radius); padding: 14px 20px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1); z-index: 200;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 600; color: var(--gold);
+    animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes fadeOut { to { opacity: 0; transform: translateX(40px); } }
+
+  /* ── Summary cards ── */
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 600px) { .summary-grid { grid-template-columns: 1fr; } }
+  .summary-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .summary-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .summary-card.active { border-color: var(--accent); border-width: 2px; }
+  .summary-name { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .summary-stats { font-size: 12.5px; color: var(--text-sub); line-height: 1.8; }
+  .summary-stats strong { color: var(--text); }
+
+  /* ── Name edit ── */
+  .name-edit-input {
+    padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px;
+    font-size: 13px; font-family: inherit; width: 100px;
+  }
+  .name-edit-input:focus { outline: none; border-color: var(--accent); }
+
+  /* ── CSV import ── */
+  .csv-import-area {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 24px; text-align: center; color: var(--text-sub);
+    margin-bottom: 16px; cursor: pointer; transition: all 0.15s;
+  }
+  .csv-import-area:hover { border-color: var(--accent); color: var(--accent); }
+  .csv-import-area.dragover { border-color: var(--accent); background: var(--accent-light); }
+
+  @media print {
+    .nav, .no-print { display: none !important; }
+    body { background: #fff; }
+    .main { padding: 0; max-width: 100%; }
+    .print-only { display: block !important; }
+    .print-question-sheet .q-print-item { page-break-inside: avoid; padding: 12px 0; border-bottom: 1px solid #ddd; }
+    .print-question-sheet .q-print-number { font-size: 11px; font-weight: 700; color: #666; margin-bottom: 2px; }
+    .print-question-sheet .q-print-jp { font-size: 14px; margin-bottom: 8px; }
+    .print-question-sheet .q-print-answer-space { border: 1px solid #ccc; border-radius: 4px; min-height: 48px; margin-bottom: 4px; }
+    .print-answer-sheet .ans-item { padding: 6px 0; border-bottom: 1px solid #eee; page-break-inside: avoid; }
+    .print-answer-sheet .ans-number { font-size: 11px; font-weight: 700; color: #666; }
+    .print-answer-sheet .ans-jp { font-size: 12px; color: #888; }
+    .print-answer-sheet .ans-en { font-size: 13px; font-family: 'Source Serif 4', serif; }
+    .card { box-shadow: none; border: none; padding: 0; }
+    @page { margin: 20mm 15mm; }
+  }
+  .print-only { display: none; }
+  [x-cloak] { display: none !important; }
+  .fade-in { animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body x-data="app()" x-cloak x-init="init()">
+
+<!-- Toast -->
+<template x-for="(t, i) in toasts" :key="'toast'+i">
+  <div class="clear-toast" :style="'top:' + (80 + i * 60) + 'px'">
+    <span>&#x1FA99;</span> <span x-text="t"></span>
+  </div>
+</template>
+
+<!-- Nav -->
+<nav class="nav no-print">
+  <div class="nav-inner">
+    <div class="nav-title">&#x1F4D6; &#x548C;&#x6587;&#x82F1;&#x8A33;</div>
+    <div class="nav-tabs">
+      <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'">&#x51FA;&#x984C;</div>
+      <div class="nav-tab" :class="tab === 'scoring' && 'active'" @click="tab = 'scoring'">&#x63A1;&#x70B9;</div>
+      <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'">&#x5C65;&#x6B74;</div>
+      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'">&#x30DD;&#x30A4;&#x30F3;&#x30C8;</div>
+    </div>
+    <div class="child-switcher">
+      <select class="child-select" x-model="currentChildId" @change="switchChild()">
+        <template x-for="c in children" :key="c.id">
+          <option :value="c.id" x-text="c.name"></option>
+        </template>
+      </select>
+      <div class="nav-points" @click="tab = 'points'">
+        <span>&#x1FA99;</span> <span x-text="pointBalance + ' pt'"></span>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- ══ Practice ══ -->
+  <div x-show="tab === 'practice'" class="fade-in">
+
+    <!-- Summary cards for all children -->
+    <div class="summary-grid no-print">
+      <template x-for="c in children" :key="'sum'+c.id">
+        <div class="summary-card" :class="currentChildId == c.id && 'active'"
+          @click="currentChildId = c.id; switchChild();">
+          <div class="summary-name" x-text="c.name"></div>
+          <div class="summary-stats">
+            &#x30AF;&#x30EA;&#x30A2;: <strong x-text="summaryData[c.id]?.cleared || 0"></strong> / <span x-text="questions.length"></span><br>
+            &#x30DD;&#x30A4;&#x30F3;&#x30C8;: <strong style="color:var(--gold);" x-text="summaryData[c.id]?.points || 0"></strong> pt
+          </div>
+          <div style="margin-top:8px;">
+            <div class="progress-track">
+              <div class="progress-fill" :style="'width:' + (summaryData[c.id]?.percent || 0) + '%'"></div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div class="stats-bar no-print">
+      <div class="stat-item">
+        <div class="stat-label">&#x5168;&#x554F;&#x984C;&#x6570;</div>
+        <div class="stat-value" x-text="questions.length"></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">&#x30AF;&#x30EA;&#x30A2;&#x6E08;</div>
+        <div class="stat-value accent" x-text="clearedCount"></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">&#x9032;&#x6357;</div>
+        <div class="stat-value accent" x-text="progressPercent + '%'"></div>
+      </div>
+      <div class="stat-item gold">
+        <div class="stat-label">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x6B8B;&#x9AD8;</div>
+        <div class="stat-value gold" x-text="pointBalance"></div>
+      </div>
+    </div>
+
+    <div class="no-print" style="margin-bottom: 20px;">
+      <div class="progress-track">
+        <div class="progress-fill" :style="'width:' + progressPercent + '%'"></div>
+      </div>
+    </div>
+
+    <div class="card no-print">
+      <div class="config-row">
+        <span class="config-label">&#x51FA;&#x984C;&#x6570;</span>
+        <input type="number" class="config-input" x-model.number="batchSize" min="1" max="50">
+        <span style="font-size:13px; color:var(--text-sub)">&#x554F;</span>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary" @click="generateBatch()" :disabled="loading">&#x6B21;&#x306E;<span x-text="batchSize"></span>&#x554F;&#x3092;&#x51FA;&#x984C;</button>
+        <button class="btn btn-outline" @click="printQuestions()" x-show="currentBatch.length > 0">&#x1F5A8; &#x554F;&#x984C;&#x3092;&#x5370;&#x5237;</button>
+        <button class="btn btn-outline" @click="printAnswers()" x-show="currentBatch.length > 0">&#x1F4C4; &#x89E3;&#x7B54;&#x3092;&#x5370;&#x5237;</button>
+      </div>
+    </div>
+
+    <template x-if="currentBatch.length > 0">
+      <div class="card no-print" style="margin-top:8px;">
+        <div style="font-size:13px; color:var(--text-sub); margin-bottom:12px; font-weight:500;">
+          <span x-text="currentChildName"></span>: &#x554F;&#x984C; <span x-text="currentBatch[0].number"></span> &#x301C; <span x-text="currentBatch[currentBatch.length-1].number"></span>
+        </div>
+        <template x-for="q in currentBatch" :key="q.id">
+          <div class="q-item">
+            <div class="q-number">&#x554F; <span x-text="q.number"></span></div>
+            <div class="q-japanese" x-text="q.japanese"></div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <div x-show="currentBatch.length === 0 && clearedCount < questions.length" class="card no-print" style="text-align:center; color:var(--text-sub); padding:40px;">
+      &#x300C;&#x6B21;&#x306E;&#x25CB;&#x554F;&#x3092;&#x51FA;&#x984C;&#x300D;&#x3092;&#x62BC;&#x3059;&#x3068;&#x3001;<span x-text="currentChildName"></span>&#x306E;&#x672A;&#x30AF;&#x30EA;&#x30A2;&#x554F;&#x984C;&#x304C;&#x8868;&#x793A;&#x3055;&#x308C;&#x307E;&#x3059;
+    </div>
+    <div x-show="clearedCount >= questions.length && questions.length > 0" class="card no-print" style="text-align:center; padding:40px;">
+      &#x1F389; <strong x-text="currentChildName"></strong> &#x306F;&#x3059;&#x3079;&#x3066;&#x306E;&#x554F;&#x984C;&#x3092;&#x30AF;&#x30EA;&#x30A2;&#x3057;&#x307E;&#x3057;&#x305F;&#xFF01;
+    </div>
+
+    <!-- Print sheets -->
+    <div class="print-only print-question-sheet" x-show="printMode === 'questions'">
+      <div style="text-align:center; margin-bottom:20px;">
+        <div style="font-size:16px; font-weight:700;">&#x548C;&#x6587;&#x82F1;&#x8A33;&#x30C6;&#x30B9;&#x30C8;</div>
+        <div style="font-size:12px; color:#888; margin-top:4px;">
+          &#x540D;&#x524D;: <span x-text="currentChildName"></span>&#x3000;&#x65E5;&#x4ED8;: _______________
+        </div>
+      </div>
+      <template x-for="q in currentBatch" :key="'pq'+q.id">
+        <div class="q-print-item">
+          <div class="q-print-number">&#x554F; <span x-text="q.number"></span></div>
+          <div class="q-print-jp" x-text="q.japanese"></div>
+          <div class="q-print-answer-space"></div>
+        </div>
+      </template>
+    </div>
+    <div class="print-only print-answer-sheet" x-show="printMode === 'answers'">
+      <div style="text-align:center; margin-bottom:20px;">
+        <div style="font-size:16px; font-weight:700;">&#x89E3;&#x7B54;&#xFF08;<span x-text="currentChildName"></span>&#xFF09;</div>
+      </div>
+      <template x-for="q in currentBatch" :key="'pa'+q.id">
+        <div class="ans-item">
+          <div class="ans-number">&#x554F; <span x-text="q.number"></span></div>
+          <div class="ans-jp" x-text="q.japanese"></div>
+          <div class="ans-en" x-text="q.english"></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ══ Scoring ══ -->
+  <div x-show="tab === 'scoring'" class="fade-in">
+    <div class="page-header">
+      <h2>&#x63A1;&#x70B9;&#x5165;&#x529B; &#x2014; <span x-text="currentChildName"></span></h2>
+      <p x-show="currentBatch.length > 0">&#x51FA;&#x984C;&#x4E2D;&#x306E;&#x554F;&#x984C;&#x306B;&#x25CB;&#xD7;&#x3092;&#x3064;&#x3051;&#x3066;&#x304F;&#x3060;&#x3055;&#x3044;</p>
+      <p x-show="currentBatch.length === 0">&#x5148;&#x306B;&#x300C;&#x51FA;&#x984C;&#x300D;&#x30BF;&#x30D6;&#x3067;&#x554F;&#x984C;&#x3092;&#x51FA;&#x3057;&#x3066;&#x304F;&#x3060;&#x3055;&#x3044;</p>
+    </div>
+    <template x-if="currentBatch.length > 0">
+      <div>
+        <div class="card">
+          <template x-for="q in currentBatch" :key="'s'+q.id">
+            <div class="score-row">
+              <div class="score-text">
+                <div class="q-number">&#x554F; <span x-text="q.number"></span></div>
+                <div class="q-japanese" x-text="q.japanese"></div>
+                <div class="answer-text" x-text="q.english"></div>
+              </div>
+              <div class="score-buttons">
+                <button class="score-btn" :class="scoring[q.id] === true && 'correct'"
+                  @click="scoring[q.id] = scoring[q.id] === true ? null : true">&#x25CB;</button>
+                <button class="score-btn" :class="scoring[q.id] === false && 'wrong'"
+                  @click="scoring[q.id] = scoring[q.id] === false ? null : false">&#xD7;</button>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div style="margin-top:16px; display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-primary" @click="submitScoring()" :disabled="!allScored() || loading">&#x63A1;&#x70B9;&#x3092;&#x8A18;&#x9332;&#x3059;&#x308B;</button>
+          <span style="font-size:13px; color:var(--text-sub);" x-show="!allScored()">&#x3059;&#x3079;&#x3066;&#x306E;&#x554F;&#x984C;&#x306B;&#x25CB;&#xD7;&#x3092;&#x3064;&#x3051;&#x3066;&#x304F;&#x3060;&#x3055;&#x3044;</span>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ══ History ══ -->
+  <div x-show="tab === 'history'" class="fade-in">
+    <div class="page-header">
+      <h2>&#x5B66;&#x7FD2;&#x5C65;&#x6B74; &#x2014; <span x-text="currentChildName"></span></h2>
+      <p>&#x554F;&#x984C;&#x3054;&#x3068;&#x306E;&#x6B63;&#x7B54;&#x72B6;&#x6CC1;&#x3068;&#x30AF;&#x30EA;&#x30A2;&#x5224;&#x5B9A;</p>
+    </div>
+    <div class="filter-tabs no-print">
+      <div class="filter-tab" :class="historyFilter === 'all' && 'active'" @click="historyFilter = 'all'">&#x3059;&#x3079;&#x3066;</div>
+      <div class="filter-tab" :class="historyFilter === 'cleared' && 'active'" @click="historyFilter = 'cleared'">&#x30AF;&#x30EA;&#x30A2;&#x6E08;</div>
+      <div class="filter-tab" :class="historyFilter === 'pending' && 'active'" @click="historyFilter = 'pending'">&#x672A;&#x30AF;&#x30EA;&#x30A2;</div>
+      <div class="filter-tab" :class="historyFilter === 'unanswered' && 'active'" @click="historyFilter = 'unanswered'">&#x672A;&#x56DE;&#x7B54;</div>
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th style="width:50px">No.</th>
+            <th>&#x554F;&#x984C;</th>
+            <th style="width:80px">&#x6B63;&#x7B54;&#x7387;</th>
+            <th style="width:70px">&#x72B6;&#x614B;</th>
+            <th style="width:140px">&#x5C65;&#x6B74;</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="q in filteredProgress()" :key="'h'+q.question_id">
+            <tr>
+              <td style="font-weight:600; color:var(--text-sub);" x-text="q.number"></td>
+              <td>
+                <div x-text="q.japanese" style="font-size:13.5px;"></div>
+                <div style="font-size:12px; color:var(--text-sub); font-family:'Source Serif 4',serif; font-style:italic; margin-top:2px;" x-text="q.english"></div>
+              </td>
+              <td><span x-text="q.accuracy !== null ? q.accuracy + '%' : '&#x2014;'"></span></td>
+              <td>
+                <span class="badge"
+                  :class="q.cleared ? 'badge-clear' : (q.history.length > 0 ? 'badge-pending' : '')"
+                  x-text="q.cleared ? '&#x30AF;&#x30EA;&#x30A2;' : (q.history.length > 0 ? '&#x5B66;&#x7FD2;&#x4E2D;' : '&#x2014;')"></span>
+              </td>
+              <td>
+                <div class="history-dots">
+                  <template x-for="(h, i) in q.history" :key="'dot'+q.question_id+'_'+i">
+                    <div class="history-dot" :class="h.correct ? 'badge-correct' : 'badge-wrong'"
+                      :title="h.date" x-text="h.correct ? '&#x25CB;' : '&#xD7;'"></div>
+                  </template>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══ Points ══ -->
+  <div x-show="tab === 'points'" class="fade-in">
+    <div class="page-header">
+      <h2>&#x30DD;&#x30A4;&#x30F3;&#x30C8; &#x2014; <span x-text="currentChildName"></span></h2>
+      <p>&#x30AF;&#x30EA;&#x30A2;&#x3067;&#x7372;&#x5F97;&#x3057;&#x305F;&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x3092;&#x304A;&#x91D1;&#x3084;&#x30B9;&#x30DE;&#x30DB;&#x6642;&#x9593;&#x306B;&#x4EA4;&#x63DB;</p>
+    </div>
+
+    <div class="point-balance-card">
+      <div class="point-balance-label" x-text="currentChildName + ' &#x306E;&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x6B8B;&#x9AD8;'"></div>
+      <div>
+        <span class="point-balance-value" x-text="pointBalance"></span>
+        <span class="point-balance-unit">pt</span>
+      </div>
+    </div>
+
+    <div class="exchange-grid">
+      <div class="exchange-card">
+        <div class="exchange-icon">&#x1F4B0;</div>
+        <div class="exchange-title">&#x304A;&#x91D1;&#x306B;&#x4EA4;&#x63DB;</div>
+        <div class="exchange-rate">1 pt = <span x-text="exchangeRates.money"></span>&#x5186;</div>
+        <div class="exchange-input-row">
+          <input type="number" class="exchange-input" x-model.number="exchangeMoney" min="1" placeholder="pt">
+          <span style="font-size:13px; color:var(--text-sub)">pt</span>
+        </div>
+        <div class="exchange-result" x-show="exchangeMoney > 0">&#x2192; <strong x-text="exchangeMoney * exchangeRates.money"></strong> &#x5186;</div>
+        <button class="btn btn-gold btn-sm" @click="spendPoints('money', exchangeMoney)"
+          :disabled="!exchangeMoney || exchangeMoney <= 0 || exchangeMoney > pointBalance || loading">&#x4EA4;&#x63DB;&#x3059;&#x308B;</button>
+        <div x-show="exchangeMoney > pointBalance && exchangeMoney > 0" style="font-size:11px; color:var(--wrong); margin-top:6px;">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x304C;&#x8DB3;&#x308A;&#x307E;&#x305B;&#x3093;</div>
+      </div>
+      <div class="exchange-card">
+        <div class="exchange-icon">&#x1F4F1;</div>
+        <div class="exchange-title">&#x30B9;&#x30DE;&#x30DB;&#x6642;&#x9593;&#x306B;&#x4EA4;&#x63DB;</div>
+        <div class="exchange-rate">1 pt = <span x-text="exchangeRates.phone"></span>&#x5206;</div>
+        <div class="exchange-input-row">
+          <input type="number" class="exchange-input" x-model.number="exchangePhone" min="1" placeholder="pt">
+          <span style="font-size:13px; color:var(--text-sub)">pt</span>
+        </div>
+        <div class="exchange-result" x-show="exchangePhone > 0">&#x2192; <strong x-text="exchangePhone * exchangeRates.phone"></strong> &#x5206;</div>
+        <button class="btn btn-gold btn-sm" @click="spendPoints('phone', exchangePhone)"
+          :disabled="!exchangePhone || exchangePhone <= 0 || exchangePhone > pointBalance || loading">&#x4EA4;&#x63DB;&#x3059;&#x308B;</button>
+        <div x-show="exchangePhone > pointBalance && exchangePhone > 0" style="font-size:11px; color:var(--wrong); margin-top:6px;">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x304C;&#x8DB3;&#x308A;&#x307E;&#x305B;&#x3093;</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">&#x4EA4;&#x63DB;&#x30EC;&#x30FC;&#x30C8;&#x8A2D;&#x5B9A;&#xFF08;&#x5168;&#x54E1;&#x5171;&#x901A;&#xFF09;</div>
+      <div class="config-row">
+        <span class="config-label">1pt &#x2192; &#x304A;&#x91D1;</span>
+        <input type="number" class="config-input" x-model.number="exchangeRates.money" min="1" @change="saveSettings()">
+        <span style="font-size:13px; color:var(--text-sub)">&#x5186;</span>
+      </div>
+      <div class="config-row" style="margin-bottom:0;">
+        <span class="config-label">1pt &#x2192; &#x30B9;&#x30DE;&#x30DB;</span>
+        <input type="number" class="config-input" x-model.number="exchangeRates.phone" min="1" @change="saveSettings()">
+        <span style="font-size:13px; color:var(--text-sub)">&#x5206;</span>
+      </div>
+    </div>
+
+    <!-- Name editing -->
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">&#x540D;&#x524D;&#x306E;&#x5909;&#x66F4;</div>
+      <template x-for="c in children" :key="'name'+c.id">
+        <div class="config-row">
+          <span class="config-label" x-text="'#' + c.id"></span>
+          <input type="text" class="name-edit-input" :value="c.name" @change="updateChildName(c.id, $event.target.value)" style="width:140px;">
+        </div>
+      </template>
+    </div>
+
+    <!-- CSV Import -->
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">CSV&#x30A4;&#x30F3;&#x30DD;&#x30FC;&#x30C8;</div>
+      <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">&#x30AB;&#x30E9;&#x30E0;&#x69CB;&#x6210;: &#x554F;&#x984C;&#x756A;&#x53F7;, &#x548C;&#x6587;, &#x6A21;&#x7BC4;&#x82F1;&#x8A33;</p>
+      <div class="csv-import-area"
+        @click="$refs.csvInput.click()"
+        @dragover.prevent="$event.currentTarget.classList.add('dragover')"
+        @dragleave="$event.currentTarget.classList.remove('dragover')"
+        @drop.prevent="$event.currentTarget.classList.remove('dragover'); handleCsvDrop($event)">
+        &#x30AF;&#x30EA;&#x30C3;&#x30AF;&#x307E;&#x305F;&#x306F;&#x30C9;&#x30E9;&#x30C3;&#x30B0;&amp;&#x30C9;&#x30ED;&#x30C3;&#x30D7;&#x3067;CSV&#x3092;&#x30A2;&#x30C3;&#x30D7;&#x30ED;&#x30FC;&#x30C9;
+      </div>
+      <input type="file" accept=".csv" x-ref="csvInput" @change="handleCsvUpload($event)" style="display:none;">
+      <div x-show="csvResult" style="font-size:13px; margin-top:8px;">
+        <span x-show="csvResult" x-text="csvResult" style="color:var(--accent);"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x5C65;&#x6B74;</div>
+      <div x-show="pointLogs.length === 0" style="color:var(--text-sub); font-size:13px; text-align:center; padding:20px;">
+        &#x307E;&#x3060;&#x8A18;&#x9332;&#x304C;&#x3042;&#x308A;&#x307E;&#x305B;&#x3093;
+      </div>
+      <template x-for="(log, i) in [...pointLogs].reverse()" :key="'log'+log.id">
+        <div class="point-log-item">
+          <div class="point-log-icon" :class="log.amount > 0 ? 'earn' : 'spend'">
+            <span x-text="log.amount > 0 ? '&#xFF0B;' : '&#xFF0D;'"></span>
+          </div>
+          <div class="point-log-detail">
+            <div class="point-log-desc" x-text="log.description"></div>
+            <div class="point-log-date" x-text="log.date"></div>
+          </div>
+          <div class="point-log-amount" :class="log.amount > 0 ? 'earn' : 'spend'"
+            x-text="(log.amount > 0 ? '+' : '') + log.amount + ' pt'"></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function app() {
+  return {
+    tab: 'practice',
+    loading: false,
+    questions: [],
+    children: [],
+    currentChildId: null,
+    currentBatch: [],
+    batchSize: 10,
+    scoring: {},
+    printMode: null,
+    historyFilter: 'all',
+    exchangeRates: { money: 10, phone: 10 },
+    exchangeMoney: null,
+    exchangePhone: null,
+    toasts: [],
+    progress: [],
+    pointBalance: 0,
+    pointLogs: [],
+    clearedCount: 0,
+    progressPercent: 0,
+    summaryData: {},
+    csvResult: null,
+
+    get currentChildName() {
+      const c = this.children.find(c => c.id == this.currentChildId);
+      return c ? c.name : '';
+    },
+
+    async init() {
+      await this.loadQuestions();
+      await this.loadChildren();
+      await this.loadSettings();
+      if (this.children.length > 0) {
+        this.currentChildId = this.children[0].id;
+        await this.loadChildData();
+        await this.loadAllSummaries();
+      }
+    },
+
+    async api(url, options = {}) {
+      const res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+        ...options,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Error' }));
+        throw new Error(err.detail || 'API Error');
+      }
+      return res.json();
+    },
+
+    async loadQuestions() {
+      this.questions = await this.api('/api/questions');
+    },
+
+    async loadChildren() {
+      this.children = await this.api('/api/children');
+    },
+
+    async loadSettings() {
+      const s = await this.api('/api/settings');
+      this.exchangeRates.money = s.exchange_rate_money;
+      this.exchangeRates.phone = s.exchange_rate_phone;
+    },
+
+    async loadChildData() {
+      if (!this.currentChildId) return;
+      const [progress, points] = await Promise.all([
+        this.api(`/api/children/${this.currentChildId}/progress`),
+        this.api(`/api/children/${this.currentChildId}/points`),
+      ]);
+      this.progress = progress;
+      this.pointBalance = points.balance;
+      this.pointLogs = points.logs;
+      this.clearedCount = progress.filter(p => p.cleared).length;
+      this.progressPercent = this.questions.length > 0
+        ? Math.round(this.clearedCount / this.questions.length * 100) : 0;
+    },
+
+    async loadAllSummaries() {
+      for (const c of this.children) {
+        const [progress, points] = await Promise.all([
+          this.api(`/api/children/${c.id}/progress`),
+          this.api(`/api/children/${c.id}/points`),
+        ]);
+        const cleared = progress.filter(p => p.cleared).length;
+        this.summaryData[c.id] = {
+          cleared,
+          points: points.balance,
+          percent: this.questions.length > 0 ? Math.round(cleared / this.questions.length * 100) : 0,
+        };
+      }
+    },
+
+    async switchChild() {
+      this.currentBatch = [];
+      this.scoring = {};
+      this.exchangeMoney = null;
+      this.exchangePhone = null;
+      await this.loadChildData();
+    },
+
+    async generateBatch() {
+      this.loading = true;
+      try {
+        this.currentBatch = await this.api(`/api/children/${this.currentChildId}/batch?size=${this.batchSize}`);
+        this.scoring = {};
+        this.currentBatch.forEach(q => { this.scoring[q.id] = null; });
+        if (this.currentBatch.length === 0) {
+          alert(this.currentChildName + ' はすべての問題をクリアしました！');
+        }
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    printQuestions() {
+      this.printMode = 'questions';
+      this.$nextTick(() => window.print());
+      setTimeout(() => { this.printMode = null; }, 500);
+    },
+    printAnswers() {
+      this.printMode = 'answers';
+      this.$nextTick(() => window.print());
+      setTimeout(() => { this.printMode = null; }, 500);
+    },
+
+    allScored() {
+      return this.currentBatch.length > 0 &&
+        this.currentBatch.every(q => this.scoring[q.id] === true || this.scoring[q.id] === false);
+    },
+
+    async submitScoring() {
+      this.loading = true;
+      try {
+        const answers = this.currentBatch.map(q => ({
+          question_id: q.id,
+          correct: this.scoring[q.id],
+        }));
+        const result = await this.api(`/api/children/${this.currentChildId}/answers`, {
+          method: 'POST',
+          body: JSON.stringify({ answers }),
+        });
+
+        if (result.points_earned > 0) {
+          const nums = result.newly_cleared.map(q => '問' + q.number).join(', ');
+          this.showToast('+' + result.points_earned + ' pt！ ' + nums + ' クリア');
+        }
+
+        alert(this.currentChildName + ': ' + result.correct + '/' + result.total + ' 正解' +
+          (result.points_earned > 0 ? '\n' + result.points_earned + 'ポイント獲得！' : ''));
+
+        this.scoring = {};
+        this.currentBatch = [];
+        await this.loadChildData();
+        await this.loadAllSummaries();
+        this.tab = 'history';
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async spendPoints(type, amount) {
+      if (!amount || amount <= 0 || amount > this.pointBalance) return;
+      this.loading = true;
+      try {
+        const result = await this.api(`/api/children/${this.currentChildId}/points/spend`, {
+          method: 'POST',
+          body: JSON.stringify({ amount, type }),
+        });
+        this.showToast(this.currentChildName + ': ' + amount + 'pt 使用');
+        if (type === 'money') this.exchangeMoney = null;
+        else this.exchangePhone = null;
+        await this.loadChildData();
+        await this.loadAllSummaries();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async saveSettings() {
+      await this.api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          exchange_rate_money: this.exchangeRates.money,
+          exchange_rate_phone: this.exchangeRates.phone,
+        }),
+      });
+    },
+
+    async updateChildName(childId, newName) {
+      if (!newName.trim()) return;
+      await this.api(`/api/children/${childId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      await this.loadChildren();
+    },
+
+    showToast(msg) {
+      this.toasts.push(msg);
+      setTimeout(() => { this.toasts.shift(); }, 3000);
+    },
+
+    filteredProgress() {
+      switch (this.historyFilter) {
+        case 'cleared': return this.progress.filter(q => q.cleared);
+        case 'pending': return this.progress.filter(q => !q.cleared && q.history.length > 0);
+        case 'unanswered': return this.progress.filter(q => q.history.length === 0);
+        default: return this.progress;
+      }
+    },
+
+    async handleCsvUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      await this.uploadCsv(file);
+      event.target.value = '';
+    },
+
+    async handleCsvDrop(event) {
+      const file = event.dataTransfer.files[0];
+      if (!file) return;
+      await this.uploadCsv(file);
+    },
+
+    async uploadCsv(file) {
+      this.csvResult = null;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/api/questions/import', {
+          method: 'POST',
+          body: formData,
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'インポートエラー');
+        }
+        const result = await res.json();
+        this.csvResult = `インポート完了: ${result.imported}問追加, ${result.updated}問更新`;
+        await this.loadQuestions();
+        await this.loadChildData();
+        await this.loadAllSummaries();
+      } catch (e) {
+        this.csvResult = 'エラー: ' + e.message;
+      }
+    },
+  };
+}
+</script>
+</body>
+</html>
