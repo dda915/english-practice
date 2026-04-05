@@ -1,10 +1,9 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
-import shutil
 
-from .database import engine, Base, DB_DIR
+from .database import engine, Base
 from .models import Question, Child, Answer, PointLog, Setting
 from .routers import questions, children, answers, points, settings
 
@@ -26,12 +25,6 @@ def serve_index():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
-@app.post("/upload-db")
-async def upload_db(file: UploadFile = File(...)):
-    db_path = DB_DIR / "english.db"
-    with open(db_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    return {"ok": True}
 
 
 
