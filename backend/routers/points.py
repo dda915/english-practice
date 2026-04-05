@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import PointLog, Child, Setting, ExchangeRequest
-from ..mail import send_notification
+from ..mail import send_exchange_notification
 
 router = APIRouter(prefix="/api/children", tags=["points"])
 
@@ -97,15 +97,14 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
     db.commit()
 
     # メール通知
-    send_notification(
-        subject=f"【英語学習】{child.name}がポイント交換を申請しました",
-        body=(
-            f"{child.name}がポイント交換を申請しました。\n\n"
-            f"交換内容: {type_label} {converted}{unit}\n"
-            f"使用ポイント: {body.amount}pt\n"
-            f"残高: {balance - body.amount}pt\n\n"
-            f"対応したら管理画面で「対応済み」にしてください。"
-        ),
+    send_exchange_notification(
+        child_name=child.name,
+        type_label=type_label,
+        converted=converted,
+        unit=unit,
+        points=body.amount,
+        balance=balance - body.amount,
+        request_id=req.id,
     )
 
     new_balance = balance - body.amount
@@ -143,3 +142,20 @@ def fulfill_request(req_id: int, db: Session = Depends(get_db)):
     req.fulfilled = True
     db.commit()
     return {"ok": True}
+
+
+@router.get("/exchange-requests/{req_id}/fulfill")
+def fulfill_request_from_email(req_id: int, from_: str = "", db: Session = Depends(get_db)):
+    """メールのリンクから対応済みにする"""
+    from fastapi.responses import HTMLResponse
+    req = db.query(ExchangeRequest).get(req_id)
+    if not req:
+        return HTMLResponse("<h2>リクエストが見つかりません</h2>")
+    req.fulfilled = True
+    db.commit()
+    return HTMLResponse(f"""\
+<html><body style="font-family:sans-serif; max-width:500px; margin:50px auto; text-align:center;">
+<h2 style="color:#2d5a27;">対応済みにしました</h2>
+<p>{req.child.name} の交換リクエストを処理しました。</p>
+<a href="https://english-practice-5285.onrender.com" style="color:#2d5a27;">サイトに戻る</a>
+</body></html>""")
