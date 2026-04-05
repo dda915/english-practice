@@ -300,7 +300,7 @@
     .nav, .no-print { display: none !important; }
     body { background: #fff; }
     .main { padding: 0; max-width: 100%; }
-    .print-only { display: block !important; }
+    .print-only.print-active { display: block !important; }
     .print-question-sheet .q-print-item { page-break-inside: avoid; padding: 12px 0; border-bottom: 1px solid #ddd; }
     .print-question-sheet .q-print-number { font-size: 11px; font-weight: 700; color: #666; margin-bottom: 2px; }
     .print-question-sheet .q-print-jp { font-size: 14px; margin-bottom: 8px; }
@@ -441,7 +441,7 @@
     </div>
 
     <!-- Print sheets -->
-    <div class="print-only print-question-sheet" x-show="printMode === 'questions'">
+    <div class="print-only print-question-sheet" :class="printMode === 'questions' && 'print-active'">
       <div style="text-align:center; margin-bottom:20px;">
         <div style="font-size:16px; font-weight:700;">&#x548C;&#x6587;&#x82F1;&#x8A33;&#x30C6;&#x30B9;&#x30C8;</div>
         <div style="font-size:12px; color:#888; margin-top:4px;">
@@ -456,7 +456,7 @@
         </div>
       </template>
     </div>
-    <div class="print-only print-answer-sheet" x-show="printMode === 'answers'">
+    <div class="print-only print-answer-sheet" :class="printMode === 'answers' && 'print-active'">
       <div style="text-align:center; margin-bottom:20px;">
         <div style="font-size:16px; font-weight:700;">&#x89E3;&#x7B54;&#xFF08;<span x-text="currentChildName"></span>&#xFF09;</div>
       </div>
