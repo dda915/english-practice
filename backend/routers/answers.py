@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Answer, Question, PointLog, Child, Setting
+from ..backup import backup_to_dropbox
 
 router = APIRouter(prefix="/api/children", tags=["answers"])
 
@@ -78,6 +79,7 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
         ))
 
     db.commit()
+    backup_to_dropbox()
 
     correct_count = sum(1 for item in body.answers if item.correct)
     earned = total_points if newly_cleared else 0

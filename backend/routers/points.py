@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import PointLog, Child, Setting, ExchangeRequest
 from ..mail import send_exchange_notification
+from ..backup import backup_to_dropbox
 
 router = APIRouter(prefix="/api/children", tags=["points"])
 
@@ -178,6 +179,7 @@ def fulfill_request(req_id: int, db: Session = Depends(get_db)):
     req.fulfilled = True
     req.fulfilled_at = datetime.now(JST)
     db.commit()
+    backup_to_dropbox()
     return {"ok": True}
 
 
@@ -213,6 +215,7 @@ def fulfill_request_from_email(req_id: int, db: Session = Depends(get_db)):
     req.fulfilled = True
     req.fulfilled_at = datetime.now(JST)
     db.commit()
+    backup_to_dropbox()
 
     return HTMLResponse(f"""\
 <html><body style="font-family:sans-serif; max-width:500px; margin:50px auto; text-align:center;">
