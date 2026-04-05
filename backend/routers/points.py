@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import PointLog, Child, Setting
+from ..models import PointLog, Child, Setting, ExchangeRequest
+from ..mail import send_notification
 
 router = APIRouter(prefix="/api/children", tags=["points"])
 
@@ -65,19 +66,80 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
     if body.type == "money":
         converted = body.amount * money_val
         desc = f"お金に交換（{converted}円）"
+        type_label = "お金"
+        unit = "円"
     elif body.type == "phone":
         converted = body.amount * phone_val
         desc = f"スマホ時間に交換（{converted}分）"
+        type_label = "スマホ時間"
+        unit = "分"
     else:
         raise HTTPException(400, "typeは 'money' または 'phone' にしてください")
 
+    # ポイント減算
     db.add(PointLog(
         child_id=child_id,
         logged_date=date.today(),
         amount=-body.amount,
         description=desc,
     ))
+
+    # 交換リクエスト作成
+    req = ExchangeRequest(
+        child_id=child_id,
+        requested_date=date.today(),
+        exchange_type=body.type,
+        points=body.amount,
+        converted_value=converted,
+        fulfilled=False,
+    )
+    db.add(req)
     db.commit()
+
+    # メール通知
+    send_notification(
+        subject=f"【英語学習】{child.name}がポイント交換を申請しました",
+        body=(
+            f"{child.name}がポイント交換を申請しました。\n\n"
+            f"交換内容: {type_label} {converted}{unit}\n"
+            f"使用ポイント: {body.amount}pt\n"
+            f"残高: {balance - body.amount}pt\n\n"
+            f"対応したら管理画面で「対応済み」にしてください。"
+        ),
+    )
 
     new_balance = balance - body.amount
     return {"balance": new_balance, "spent": body.amount, "description": desc}
+
+
+@router.get("/exchange-requests")
+def list_exchange_requests(db: Session = Depends(get_db)):
+    """全交換リクエスト一覧"""
+    reqs = (
+        db.query(ExchangeRequest)
+        .order_by(ExchangeRequest.id.desc())
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "child_name": r.child.name,
+            "date": r.requested_date.isoformat(),
+            "type": r.exchange_type,
+            "points": r.points,
+            "converted_value": r.converted_value,
+            "fulfilled": r.fulfilled,
+        }
+        for r in reqs
+    ]
+
+
+@router.put("/exchange-requests/{req_id}/fulfill")
+def fulfill_request(req_id: int, db: Session = Depends(get_db)):
+    """リクエストを対応済みにする"""
+    req = db.query(ExchangeRequest).get(req_id)
+    if not req:
+        raise HTTPException(404, "リクエストが見つかりません")
+    req.fulfilled = True
+    db.commit()
+    return {"ok": True}

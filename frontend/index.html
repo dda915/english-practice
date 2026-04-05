@@ -601,8 +601,21 @@
       </div>
     </div>
 
+    <template x-if="pendingRequests.length > 0">
+      <div class="card" style="margin-bottom:16px; background:var(--gold-bg); border:1px solid var(--gold-border);">
+        <div style="font-size:13px; font-weight:600; color:var(--gold); margin-bottom:8px;">申請済み（パパの対応待ち）</div>
+        <template x-for="r in pendingRequests" :key="'pr'+r.id">
+          <div style="font-size:13px; padding:6px 0; border-bottom:1px solid var(--gold-border);">
+            <span x-text="r.date"></span> —
+            <span x-text="r.type === 'money' ? 'お金 ' + r.converted_value + '円' : 'スマホ ' + r.converted_value + '分'"></span>
+            <span style="color:var(--text-sub);">（<span x-text="r.points"></span>pt）</span>
+          </div>
+        </template>
+      </div>
+    </template>
+
     <div class="card">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x5C65;&#x6B74;</div>
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント履歴</div>
       <div x-show="pointLogs.length === 0" style="color:var(--text-sub); font-size:13px; text-align:center; padding:20px;">
         &#x307E;&#x3060;&#x8A18;&#x9332;&#x304C;&#x3042;&#x308A;&#x307E;&#x305B;&#x3093;
       </div>
@@ -626,6 +639,25 @@
   <div x-show="tab === 'admin'" class="fade-in">
     <div class="page-header">
       <h2>管理設定</h2>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">交換リクエスト</div>
+      <div x-show="exchangeRequests.filter(r => !r.fulfilled).length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+        未対応のリクエストはありません
+      </div>
+      <template x-for="r in exchangeRequests" :key="'er'+r.id">
+        <div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-light); font-size:13px;">
+          <input type="checkbox" :checked="r.fulfilled" @change="fulfillRequest(r.id)" :disabled="r.fulfilled"
+            style="width:18px; height:18px; cursor:pointer;">
+          <div :style="r.fulfilled && 'text-decoration:line-through; opacity:0.5'">
+            <strong x-text="r.child_name"></strong>
+            <span x-text="r.date"></span> —
+            <span x-text="r.type === 'money' ? 'お金 ' + r.converted_value + '円' : 'スマホ ' + r.converted_value + '分'"></span>
+            <span style="color:var(--text-sub);">（<span x-text="r.points"></span>pt）</span>
+          </div>
+        </div>
+      </template>
     </div>
 
     <div class="card" style="margin-bottom:24px;">
@@ -695,6 +727,8 @@ function app() {
     exchangeRates: { money: 10, phone: 10 },
     pointsPerClear: 1,
     adminUnlocked: false,
+    exchangeRequests: [],
+    pendingRequests: [],
     exchangeMoney: null,
     exchangePhone: null,
     toasts: [],
@@ -752,13 +786,16 @@ function app() {
 
     async loadChildData() {
       if (!this.currentChildId) return;
-      const [progress, points] = await Promise.all([
+      const [progress, points, requests] = await Promise.all([
         this.api(`/api/children/${this.currentChildId}/progress`),
         this.api(`/api/children/${this.currentChildId}/points`),
+        this.api('/api/children/exchange-requests'),
       ]);
       this.progress = progress;
       this.pointBalance = points.balance;
       this.pointLogs = points.logs;
+      this.exchangeRequests = requests;
+      this.pendingRequests = requests.filter(r => !r.fulfilled && r.child_name === this.currentChildName);
       this.clearedCount = progress.filter(p => p.cleared).length;
       this.progressPercent = this.questions.length > 0
         ? Math.round(this.clearedCount / this.questions.length * 100) : 0;
@@ -890,7 +927,7 @@ function app() {
           method: 'POST',
           body: JSON.stringify({ amount, type }),
         });
-        this.showToast(this.currentChildName + ': ' + amount + 'pt 使用');
+        this.showToast(this.currentChildName + ': ' + amount + 'pt 交換申請しました（パパに通知済み）');
         if (type === 'money') this.exchangeMoney = null;
         else this.exchangePhone = null;
         await this.loadChildData();
@@ -900,6 +937,12 @@ function app() {
       } finally {
         this.loading = false;
       }
+    },
+
+    async fulfillRequest(reqId) {
+      await this.api(`/api/children/exchange-requests/${reqId}/fulfill`, { method: 'PUT' });
+      await this.loadChildData();
+      this.showToast('対応済みにしました');
     },
 
     async saveSettings() {

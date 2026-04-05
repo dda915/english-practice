@@ -64,3 +64,17 @@ class ActiveSession(Base):
     question_ids = Column(Text, nullable=False)  # JSON array of question IDs
 
     child = relationship("Child")
+
+
+class ExchangeRequest(Base):
+    __tablename__ = "exchange_requests"
+
+    id = Column(Integer, primary_key=True)
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=False, index=True)
+    requested_date = Column(Date, nullable=False)
+    exchange_type = Column(Text, nullable=False)  # "money" or "phone"
+    points = Column(Integer, nullable=False)
+    converted_value = Column(Integer, nullable=False)  # 円 or 分
+    fulfilled = Column(Boolean, nullable=False, default=False)
+
+    child = relationship("Child")
