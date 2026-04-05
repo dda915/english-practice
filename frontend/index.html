@@ -335,7 +335,7 @@
       <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'">出題</div>
       <div class="nav-tab" :class="tab === 'scoring' && 'active'" @click="tab = 'scoring'" x-show="parentMode">採点</div>
       <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'">履歴</div>
-      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'">ポイント</div>
+      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'" x-show="parentMode">ポイント</div>
       <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode">管理</div>
       <div class="nav-tab" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
         <span x-text="parentMode ? '🔓' : '🔒'"></span>
@@ -347,7 +347,7 @@
           <option :value="c.id" x-text="c.name"></option>
         </template>
       </select>
-      <div class="nav-points" @click="tab = 'points'">
+      <div class="nav-points" @click="tab = 'points'" x-show="parentMode">
         <span>&#x1FA99;</span> <span x-text="pointBalance + ' pt'"></span>
       </div>
     </div>
@@ -867,7 +867,7 @@ function app() {
       if (this.parentMode) {
         this.parentMode = false;
         this.adminUnlocked = false;
-        if (this.tab === 'scoring' || this.tab === 'admin') {
+        if (this.tab === 'scoring' || this.tab === 'admin' || this.tab === 'points') {
           this.tab = 'practice';
         }
         return;
