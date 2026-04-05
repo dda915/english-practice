@@ -2,8 +2,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from pathlib import Path
 
-DB_DIR = Path(__file__).resolve().parent.parent / "database"
-DB_DIR.mkdir(exist_ok=True)
+import os
+
+# Render Persistent Disk: /data があればそこに保存、なければローカル
+if os.path.isdir("/data"):
+    DB_DIR = Path("/data")
+else:
+    DB_DIR = Path(__file__).resolve().parent.parent / "database"
+    DB_DIR.mkdir(exist_ok=True)
 DATABASE_URL = f"sqlite:///{DB_DIR / 'english.db'}"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
