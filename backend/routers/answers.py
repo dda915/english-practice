@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Answer, Question, PointLog, Child
+from ..models import Answer, Question, PointLog, Child, Setting
 
 router = APIRouter(prefix="/api/children", tags=["answers"])
 
@@ -66,20 +66,24 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
 
     # Award points for newly cleared
     if newly_cleared:
+        ppc_setting = db.query(Setting).get("points_per_clear")
+        points_per_clear = int(ppc_setting.value) if ppc_setting else 1
+        total_points = len(newly_cleared) * points_per_clear
         nums = ", ".join(f"問{q.number}" for q in newly_cleared)
         db.add(PointLog(
             child_id=child_id,
             logged_date=today,
-            amount=len(newly_cleared),
+            amount=total_points,
             description=f"{nums} クリア",
         ))
 
     db.commit()
 
     correct_count = sum(1 for item in body.answers if item.correct)
+    earned = total_points if newly_cleared else 0
     return {
         "total": len(body.answers),
         "correct": correct_count,
         "newly_cleared": [{"id": q.id, "number": q.number} for q in newly_cleared],
-        "points_earned": len(newly_cleared),
+        "points_earned": earned,
     }

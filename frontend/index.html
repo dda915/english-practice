@@ -336,6 +336,7 @@
       <div class="nav-tab" :class="tab === 'scoring' && 'active'" @click="tab = 'scoring'">&#x63A1;&#x70B9;</div>
       <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'">&#x5C65;&#x6B74;</div>
       <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'">&#x30DD;&#x30A4;&#x30F3;&#x30C8;</div>
+      <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()">&#x2699;</div>
     </div>
     <div class="child-switcher">
       <select class="child-select" x-model="currentChildId" @change="switchChild()">
@@ -600,48 +601,6 @@
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">&#x4EA4;&#x63DB;&#x30EC;&#x30FC;&#x30C8;&#x8A2D;&#x5B9A;&#xFF08;&#x5168;&#x54E1;&#x5171;&#x901A;&#xFF09;</div>
-      <div class="config-row">
-        <span class="config-label">1pt &#x2192; &#x304A;&#x91D1;</span>
-        <input type="number" class="config-input" x-model.number="exchangeRates.money" min="1" @change="saveSettings()">
-        <span style="font-size:13px; color:var(--text-sub)">&#x5186;</span>
-      </div>
-      <div class="config-row" style="margin-bottom:0;">
-        <span class="config-label">1pt &#x2192; &#x30B9;&#x30DE;&#x30DB;</span>
-        <input type="number" class="config-input" x-model.number="exchangeRates.phone" min="1" @change="saveSettings()">
-        <span style="font-size:13px; color:var(--text-sub)">&#x5206;</span>
-      </div>
-    </div>
-
-    <!-- Name editing -->
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">&#x540D;&#x524D;&#x306E;&#x5909;&#x66F4;</div>
-      <template x-for="c in children" :key="'name'+c.id">
-        <div class="config-row">
-          <span class="config-label" x-text="'#' + c.id"></span>
-          <input type="text" class="name-edit-input" :value="c.name" @change="updateChildName(c.id, $event.target.value)" style="width:140px;">
-        </div>
-      </template>
-    </div>
-
-    <!-- CSV Import -->
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">CSV&#x30A4;&#x30F3;&#x30DD;&#x30FC;&#x30C8;</div>
-      <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">&#x30AB;&#x30E9;&#x30E0;&#x69CB;&#x6210;: &#x554F;&#x984C;&#x756A;&#x53F7;, &#x548C;&#x6587;, &#x6A21;&#x7BC4;&#x82F1;&#x8A33;</p>
-      <div class="csv-import-area"
-        @click="$refs.csvInput.click()"
-        @dragover.prevent="$event.currentTarget.classList.add('dragover')"
-        @dragleave="$event.currentTarget.classList.remove('dragover')"
-        @drop.prevent="$event.currentTarget.classList.remove('dragover'); handleCsvDrop($event)">
-        &#x30AF;&#x30EA;&#x30C3;&#x30AF;&#x307E;&#x305F;&#x306F;&#x30C9;&#x30E9;&#x30C3;&#x30B0;&amp;&#x30C9;&#x30ED;&#x30C3;&#x30D7;&#x3067;CSV&#x3092;&#x30A2;&#x30C3;&#x30D7;&#x30ED;&#x30FC;&#x30C9;
-      </div>
-      <input type="file" accept=".csv" x-ref="csvInput" @change="handleCsvUpload($event)" style="display:none;">
-      <div x-show="csvResult" style="font-size:13px; margin-top:8px;">
-        <span x-show="csvResult" x-text="csvResult" style="color:var(--accent);"></span>
-      </div>
-    </div>
-
     <div class="card">
       <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x5C65;&#x6B74;</div>
       <div x-show="pointLogs.length === 0" style="color:var(--text-sub); font-size:13px; text-align:center; padding:20px;">
@@ -660,6 +619,58 @@
             x-text="(log.amount > 0 ? '+' : '') + log.amount + ' pt'"></div>
         </div>
       </template>
+    </div>
+  </div>
+
+  <!-- ══ Admin ══ -->
+  <div x-show="tab === 'admin'" class="fade-in">
+    <div class="page-header">
+      <h2>管理設定</h2>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント・交換レート（全員共通）</div>
+      <div class="config-row">
+        <span class="config-label">1問クリア</span>
+        <input type="number" class="config-input" x-model.number="pointsPerClear" min="1" @change="saveSettings()">
+        <span style="font-size:13px; color:var(--text-sub)">pt</span>
+      </div>
+      <div class="config-row">
+        <span class="config-label">1pt → お金</span>
+        <input type="number" class="config-input" x-model.number="exchangeRates.money" min="1" @change="saveSettings()">
+        <span style="font-size:13px; color:var(--text-sub)">円</span>
+      </div>
+      <div class="config-row" style="margin-bottom:0;">
+        <span class="config-label">1pt → スマホ</span>
+        <input type="number" class="config-input" x-model.number="exchangeRates.phone" min="1" @change="saveSettings()">
+        <span style="font-size:13px; color:var(--text-sub)">分</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">名前の変更</div>
+      <template x-for="c in children" :key="'name'+c.id">
+        <div class="config-row">
+          <span class="config-label" x-text="'#' + c.id"></span>
+          <input type="text" class="name-edit-input" :value="c.name" @change="updateChildName(c.id, $event.target.value)" style="width:140px;">
+        </div>
+      </template>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">CSVインポート</div>
+      <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">カラム構成: 問題番号, 和文, 模範英訳</p>
+      <div class="csv-import-area"
+        @click="$refs.csvInput.click()"
+        @dragover.prevent="$event.currentTarget.classList.add('dragover')"
+        @dragleave="$event.currentTarget.classList.remove('dragover')"
+        @drop.prevent="$event.currentTarget.classList.remove('dragover'); handleCsvDrop($event)">
+        クリックまたはドラッグ&amp;ドロップでCSVをアップロード
+      </div>
+      <input type="file" accept=".csv" x-ref="csvInput" @change="handleCsvUpload($event)" style="display:none;">
+      <div x-show="csvResult" style="font-size:13px; margin-top:8px;">
+        <span x-show="csvResult" x-text="csvResult" style="color:var(--accent);"></span>
+      </div>
     </div>
   </div>
 
@@ -682,6 +693,8 @@ function app() {
     printMode: null,
     historyFilter: 'all',
     exchangeRates: { money: 10, phone: 10 },
+    pointsPerClear: 1,
+    adminUnlocked: false,
     exchangeMoney: null,
     exchangePhone: null,
     toasts: [],
@@ -734,6 +747,7 @@ function app() {
       const s = await this.api('/api/settings');
       this.exchangeRates.money = s.exchange_rate_money;
       this.exchangeRates.phone = s.exchange_rate_phone;
+      this.pointsPerClear = s.points_per_clear;
     },
 
     async loadChildData() {
@@ -798,6 +812,18 @@ function app() {
         }
       } finally {
         this.loading = false;
+      }
+    },
+
+    openAdmin() {
+      if (this.adminUnlocked) {
+        this.tab = 'admin';
+        return;
+      }
+      const pw = prompt('管理パスワードを入力');
+      if (pw === '1234') {
+        this.adminUnlocked = true;
+        this.tab = 'admin';
       }
     },
 
@@ -882,6 +908,7 @@ function app() {
         body: JSON.stringify({
           exchange_rate_money: this.exchangeRates.money,
           exchange_rate_phone: this.exchangeRates.phone,
+          points_per_clear: this.pointsPerClear,
         }),
       });
     },
