@@ -1,9 +1,10 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
-from ..models import Child, Answer, Question, PointLog
+from ..models import Child, Answer, Question, PointLog, ActiveSession
 
 router = APIRouter(prefix="/api/children", tags=["children"])
 
@@ -88,11 +89,71 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
+    # 既存セッションがあればそれを返す
+    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    if session:
+        qids = json.loads(session.question_ids)
+        # セッション内の未回答・未クリア問題だけ返す
+        remaining = []
+        for qid in qids:
+            q = db.query(Question).get(qid)
+            if q and not _is_cleared(db, child_id, q.id):
+                remaining.append(q)
+        if remaining:
+            return [
+                {"id": q.id, "number": q.number, "japanese": q.japanese, "english": q.english}
+                for q in remaining
+            ]
+        # 全部クリア済みならセッション削除して新規作成へ
+        db.delete(session)
+        db.flush()
+
+    # 新規セッション作成
     questions = db.query(Question).order_by(Question.number).all()
     uncleared = [q for q in questions if not _is_cleared(db, child_id, q.id)]
     batch = uncleared[:size]
+
+    if batch:
+        qids = [q.id for q in batch]
+        db.add(ActiveSession(child_id=child_id, question_ids=json.dumps(qids)))
+        db.commit()
 
     return [
         {"id": q.id, "number": q.number, "japanese": q.japanese, "english": q.english}
         for q in batch
     ]
+
+
+@router.get("/{child_id}/session")
+def get_session(child_id: int, db: Session = Depends(get_db)):
+    """現在のセッション情報を返す"""
+    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    if not session:
+        return {"active": False, "questions": []}
+
+    qids = json.loads(session.question_ids)
+    questions = []
+    remaining = 0
+    for qid in qids:
+        q = db.query(Question).get(qid)
+        if q:
+            cleared = _is_cleared(db, child_id, q.id)
+            questions.append({
+                "id": q.id, "number": q.number,
+                "japanese": q.japanese, "english": q.english,
+                "cleared": cleared,
+            })
+            if not cleared:
+                remaining += 1
+
+    return {"active": True, "total": len(qids), "remaining": remaining, "questions": questions}
+
+
+@router.delete("/{child_id}/session")
+def clear_session(child_id: int, db: Session = Depends(get_db)):
+    """セッションを手動でリセット"""
+    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    if session:
+        db.delete(session)
+        db.commit()
+    return {"ok": True}

@@ -405,10 +405,17 @@
         <input type="number" class="config-input" x-model.number="batchSize" min="1" max="50">
         <span style="font-size:13px; color:var(--text-sub)">&#x554F;</span>
       </div>
+      <div x-show="hasActiveSession && currentBatch.length === 0" style="margin-bottom:12px; padding:12px 16px; background:var(--gold-bg); border:1px solid var(--gold-border); border-radius:var(--radius); font-size:13px;">
+        前回の続きがあります（残り <span x-text="sessionRemaining"></span>/<span x-text="sessionTotal"></span> 問）
+      </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn btn-primary" @click="generateBatch()" :disabled="loading">&#x6B21;&#x306E;<span x-text="batchSize"></span>&#x554F;&#x3092;&#x51FA;&#x984C;</button>
+        <button class="btn btn-primary" @click="generateBatch()" :disabled="loading">
+          <span x-text="hasActiveSession && currentBatch.length === 0 ? '続きから再開' : '次の' + batchSize + '問を出題'"></span>
+        </button>
+        <button class="btn btn-outline" @click="resetSession()" x-show="hasActiveSession && currentBatch.length === 0">リセット</button>
         <button class="btn btn-outline" @click="printQuestions()" x-show="currentBatch.length > 0">&#x1F5A8; &#x554F;&#x984C;&#x3092;&#x5370;&#x5237;</button>
         <button class="btn btn-outline" @click="printAnswers()" x-show="currentBatch.length > 0">&#x1F4C4; &#x89E3;&#x7B54;&#x3092;&#x5370;&#x5237;</button>
+        <button class="btn btn-outline" @click="resetSession()" x-show="currentBatch.length > 0">&#x21BB; &#x3084;&#x308A;&#x76F4;&#x3057;</button>
       </div>
     </div>
 
@@ -669,6 +676,9 @@ function app() {
     currentBatch: [],
     batchSize: 10,
     scoring: {},
+    hasActiveSession: false,
+    sessionRemaining: 0,
+    sessionTotal: 0,
     printMode: null,
     historyFilter: 'all',
     exchangeRates: { money: 10, phone: 10 },
@@ -695,6 +705,7 @@ function app() {
       if (this.children.length > 0) {
         this.currentChildId = this.children[0].id;
         await this.loadChildData();
+        await this.checkSession();
         await this.loadAllSummaries();
       }
     },
@@ -760,6 +771,19 @@ function app() {
       this.exchangeMoney = null;
       this.exchangePhone = null;
       await this.loadChildData();
+      await this.checkSession();
+    },
+
+    async checkSession() {
+      if (!this.currentChildId) return;
+      const session = await this.api(`/api/children/${this.currentChildId}/session`);
+      if (session.active && session.remaining > 0) {
+        this.hasActiveSession = true;
+        this.sessionRemaining = session.remaining;
+        this.sessionTotal = session.total;
+      } else {
+        this.hasActiveSession = false;
+      }
     },
 
     async generateBatch() {
@@ -768,12 +792,21 @@ function app() {
         this.currentBatch = await this.api(`/api/children/${this.currentChildId}/batch?size=${this.batchSize}`);
         this.scoring = {};
         this.currentBatch.forEach(q => { this.scoring[q.id] = null; });
+        this.hasActiveSession = false;
         if (this.currentBatch.length === 0) {
           alert(this.currentChildName + ' はすべての問題をクリアしました！');
         }
       } finally {
         this.loading = false;
       }
+    },
+
+    async resetSession() {
+      if (!confirm('今のセッションをリセットして、新しい問題を出しますか？')) return;
+      await this.api(`/api/children/${this.currentChildId}/session`, { method: 'DELETE' });
+      this.hasActiveSession = false;
+      this.currentBatch = [];
+      this.scoring = {};
     },
 
     printQuestions() {
@@ -815,6 +848,7 @@ function app() {
         this.scoring = {};
         this.currentBatch = [];
         await this.loadChildData();
+        await this.checkSession();
         await this.loadAllSummaries();
         this.tab = 'history';
       } finally {

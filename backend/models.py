@@ -54,3 +54,13 @@ class Setting(Base):
 
     key = Column(Text, primary_key=True)
     value = Column(Text, nullable=False)
+
+
+class ActiveSession(Base):
+    __tablename__ = "active_sessions"
+
+    id = Column(Integer, primary_key=True)
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=False, unique=True, index=True)
+    question_ids = Column(Text, nullable=False)  # JSON array of question IDs
+
+    child = relationship("Child")
