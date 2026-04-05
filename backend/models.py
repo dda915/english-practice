@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Text, Boolean, Date, ForeignKey
+from sqlalchemy import Column, Integer, Text, Boolean, Date, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -76,5 +76,6 @@ class ExchangeRequest(Base):
     points = Column(Integer, nullable=False)
     converted_value = Column(Integer, nullable=False)  # 円 or 分
     fulfilled = Column(Boolean, nullable=False, default=False)
+    fulfilled_at = Column(DateTime, nullable=True)
 
     child = relationship("Child")

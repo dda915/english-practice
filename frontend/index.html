@@ -565,10 +565,13 @@
     </div>
 
     <div class="point-balance-card">
-      <div class="point-balance-label" x-text="currentChildName + ' &#x306E;&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x6B8B;&#x9AD8;'"></div>
+      <div class="point-balance-label" x-text="currentChildName + ' のポイント残高'"></div>
       <div>
         <span class="point-balance-value" x-text="pointBalance"></span>
         <span class="point-balance-unit">pt</span>
+      </div>
+      <div x-show="pendingPointsTotal > 0" style="font-size:12px; color:var(--gold); margin-top:4px;">
+        （うち申請中: <span x-text="pendingPointsTotal"></span>pt / 使用可能: <span x-text="availablePoints"></span>pt）
       </div>
     </div>
 
@@ -583,8 +586,8 @@
         </div>
         <div class="exchange-result" x-show="exchangeMoney > 0">&#x2192; <strong x-text="exchangeMoney * exchangeRates.money"></strong> &#x5186;</div>
         <button class="btn btn-gold btn-sm" @click="spendPoints('money', exchangeMoney)"
-          :disabled="!exchangeMoney || exchangeMoney <= 0 || exchangeMoney > pointBalance || loading">&#x4EA4;&#x63DB;&#x3059;&#x308B;</button>
-        <div x-show="exchangeMoney > pointBalance && exchangeMoney > 0" style="font-size:11px; color:var(--wrong); margin-top:6px;">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x304C;&#x8DB3;&#x308A;&#x307E;&#x305B;&#x3093;</div>
+          :disabled="!exchangeMoney || exchangeMoney <= 0 || exchangeMoney > availablePoints || loading">申請する</button>
+        <div x-show="exchangeMoney > availablePoints && exchangeMoney > 0" style="font-size:11px; color:var(--wrong); margin-top:6px;">ポイントが足りません</div>
       </div>
       <div class="exchange-card">
         <div class="exchange-icon">&#x1F4F1;</div>
@@ -596,8 +599,8 @@
         </div>
         <div class="exchange-result" x-show="exchangePhone > 0">&#x2192; <strong x-text="exchangePhone * exchangeRates.phone"></strong> &#x5206;</div>
         <button class="btn btn-gold btn-sm" @click="spendPoints('phone', exchangePhone)"
-          :disabled="!exchangePhone || exchangePhone <= 0 || exchangePhone > pointBalance || loading">&#x4EA4;&#x63DB;&#x3059;&#x308B;</button>
-        <div x-show="exchangePhone > pointBalance && exchangePhone > 0" style="font-size:11px; color:var(--wrong); margin-top:6px;">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x304C;&#x8DB3;&#x308A;&#x307E;&#x305B;&#x3093;</div>
+          :disabled="!exchangePhone || exchangePhone <= 0 || exchangePhone > availablePoints || loading">申請する</button>
+        <div x-show="exchangePhone > availablePoints && exchangePhone > 0" style="font-size:11px; color:var(--wrong); margin-top:6px;">ポイントが足りません</div>
       </div>
     </div>
 
@@ -734,6 +737,8 @@ function app() {
     toasts: [],
     progress: [],
     pointBalance: 0,
+    availablePoints: 0,
+    pendingPointsTotal: 0,
     pointLogs: [],
     clearedCount: 0,
     progressPercent: 0,
@@ -793,6 +798,8 @@ function app() {
       ]);
       this.progress = progress;
       this.pointBalance = points.balance;
+      this.availablePoints = points.available;
+      this.pendingPointsTotal = points.pending;
       this.pointLogs = points.logs;
       this.exchangeRequests = requests;
       this.pendingRequests = requests.filter(r => !r.fulfilled && r.child_name === this.currentChildName);
@@ -920,14 +927,14 @@ function app() {
     },
 
     async spendPoints(type, amount) {
-      if (!amount || amount <= 0 || amount > this.pointBalance) return;
+      if (!amount || amount <= 0 || amount > this.availablePoints) return;
       this.loading = true;
       try {
         const result = await this.api(`/api/children/${this.currentChildId}/points/spend`, {
           method: 'POST',
           body: JSON.stringify({ amount, type }),
         });
-        this.showToast(this.currentChildName + ': ' + amount + 'pt 交換申請しました（パパに通知済み）');
+        this.showToast('申請しました！パパに通知を送りました');
         if (type === 'money') this.exchangeMoney = null;
         else this.exchangePhone = null;
         await this.loadChildData();
