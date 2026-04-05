@@ -851,6 +851,7 @@ function app() {
 
     async generateBatch() {
       this.loading = true;
+      await this.loadSettings();
       try {
         this.currentBatch = await this.api(`/api/children/${this.currentChildId}/batch?size=${this.batchSize}`);
         this.scoring = {};
