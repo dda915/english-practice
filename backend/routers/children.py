@@ -42,6 +42,20 @@ def _is_cleared(db: Session, child_id: int, question_id: int) -> bool:
     return correct > wrong
 
 
+def _get_cleared_set(db: Session, child_id: int) -> set[int]:
+    """クリア済み問題IDのセットを一括取得"""
+    answers = db.query(Answer).filter(Answer.child_id == child_id).all()
+    stats: dict[int, list[int]] = {}  # question_id -> [correct, wrong]
+    for a in answers:
+        if a.question_id not in stats:
+            stats[a.question_id] = [0, 0]
+        if a.correct:
+            stats[a.question_id][0] += 1
+        else:
+            stats[a.question_id][1] += 1
+    return {qid for qid, (c, w) in stats.items() if c > w}
+
+
 @router.get("/{child_id}/progress")
 def get_progress(child_id: int, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
@@ -89,16 +103,18 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
+    cleared = _get_cleared_set(db, child_id)
+
     # 既存セッションがあればそれを返す
     session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
     if session:
         qids = json.loads(session.question_ids)
-        # セッション内の未回答・未クリア問題だけ返す
         remaining = []
         for qid in qids:
-            q = db.query(Question).get(qid)
-            if q and not _is_cleared(db, child_id, q.id):
-                remaining.append(q)
+            if qid not in cleared:
+                q = db.query(Question).get(qid)
+                if q:
+                    remaining.append(q)
         if remaining:
             return [
                 {"id": q.id, "number": q.number, "japanese": q.japanese, "english": q.english}
@@ -110,7 +126,7 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
 
     # 新規セッション作成
     questions = db.query(Question).order_by(Question.number).all()
-    uncleared = [q for q in questions if not _is_cleared(db, child_id, q.id)]
+    uncleared = [q for q in questions if q.id not in cleared]
     batch = uncleared[:size]
 
     if batch:
@@ -131,19 +147,20 @@ def get_session(child_id: int, db: Session = Depends(get_db)):
     if not session:
         return {"active": False, "questions": []}
 
+    cleared = _get_cleared_set(db, child_id)
     qids = json.loads(session.question_ids)
     questions = []
     remaining = 0
     for qid in qids:
         q = db.query(Question).get(qid)
         if q:
-            cleared = _is_cleared(db, child_id, q.id)
+            is_cleared = qid in cleared
             questions.append({
                 "id": q.id, "number": q.number,
                 "japanese": q.japanese, "english": q.english,
-                "cleared": cleared,
+                "cleared": is_cleared,
             })
-            if not cleared:
+            if not is_cleared:
                 remaining += 1
 
     return {"active": True, "total": len(qids), "remaining": remaining, "questions": questions}
