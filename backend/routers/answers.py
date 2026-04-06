@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -37,7 +37,8 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
-    today = date.today()
+    now = datetime.now()
+    today = now.date()
 
     # Check which questions were cleared BEFORE recording
     was_cleared = {}
@@ -52,7 +53,7 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
         db.add(Answer(
             child_id=child_id,
             question_id=item.question_id,
-            answered_date=today,
+            answered_date=now,
             correct=item.correct,
         ))
 

@@ -31,7 +31,7 @@ class Answer(Base):
     id = Column(Integer, primary_key=True)
     child_id = Column(Integer, ForeignKey("children.id"), nullable=False, index=True)
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
-    answered_date = Column(Date, nullable=False)
+    answered_date = Column(DateTime, nullable=False)
     correct = Column(Boolean, nullable=False)
 
     child = relationship("Child", back_populates="answers")

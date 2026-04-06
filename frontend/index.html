@@ -316,9 +316,42 @@
   [x-cloak] { display: none !important; }
   .fade-in { animation: fadeIn 0.2s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Password dialog */
+  .pw-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center; z-index: 1000;
+  }
+  .pw-dialog {
+    background: var(--card); border-radius: var(--radius); padding: 28px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2); min-width: 280px; text-align: center;
+  }
+  .pw-dialog h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+  .pw-dialog input {
+    width: 100%; padding: 10px 14px; font-size: 18px; text-align: center;
+    border: 1px solid var(--border); border-radius: 6px; font-family: inherit;
+    letter-spacing: 0.2em; box-sizing: border-box;
+  }
+  .pw-dialog input:focus { outline: none; border-color: var(--accent); }
+  .pw-dialog .pw-buttons { display: flex; gap: 8px; margin-top: 16px; justify-content: center; }
+  .pw-dialog .pw-buttons button { flex: 1; }
+  .pw-error { color: #e53e3e; font-size: 12px; margin-top: 8px; }
 </style>
 </head>
 <body x-data="app()" x-cloak x-init="init()">
+
+<!-- Password dialog -->
+<div class="pw-overlay" x-show="showPwDialog" x-cloak @keydown.escape.window="showPwDialog = false">
+  <div class="pw-dialog" @click.outside="showPwDialog = false">
+    <h3>&#x30D1;&#x30B9;&#x30EF;&#x30FC;&#x30C9;&#x3092;&#x5165;&#x529B;</h3>
+    <input type="password" x-model="pwInput" @keydown.enter="submitPassword()" x-ref="pwField" placeholder="****">
+    <div class="pw-error" x-show="pwError" x-text="pwError"></div>
+    <div class="pw-buttons">
+      <button class="btn btn-outline" @click="showPwDialog = false">&#x30AD;&#x30E3;&#x30F3;&#x30BB;&#x30EB;</button>
+      <button class="btn btn-primary" @click="submitPassword()">OK</button>
+    </div>
+  </div>
+</div>
 
 <!-- Toast -->
 <template x-for="(t, i) in toasts" :key="'toast'+i">
@@ -551,7 +584,7 @@
                 <div class="history-dots">
                   <template x-for="(h, i) in q.history" :key="'dot'+q.question_id+'_'+i">
                     <div class="history-dot" :class="h.correct ? 'badge-correct' : 'badge-wrong'"
-                      :title="h.date" x-text="h.correct ? '&#x25CB;' : '&#xD7;'"></div>
+                      :title="formatDate(h.date)" x-text="h.correct ? '&#x25CB;' : '&#xD7;'"></div>
                   </template>
                 </div>
               </td>
@@ -736,6 +769,9 @@ function app() {
     pointsPerClear: 1,
     parentMode: false,
     adminUnlocked: false,
+    showPwDialog: false,
+    pwInput: '',
+    pwError: '',
     exchangeRequests: [],
     pendingRequests: [],
     exchangeMoney: null,
@@ -869,6 +905,15 @@ function app() {
       }
     },
 
+    formatDate(isoStr) {
+      if (!isoStr) return '';
+      if (isoStr.includes('T')) {
+        const d = new Date(isoStr);
+        return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+      }
+      return isoStr.replace(/-/g, '/');
+    },
+
     toggleParentMode() {
       if (this.parentMode) {
         this.parentMode = false;
@@ -878,10 +923,20 @@ function app() {
         }
         return;
       }
-      const pw = prompt('パスワードを入力');
-      if (pw === '1234') {
+      this.pwInput = '';
+      this.pwError = '';
+      this.showPwDialog = true;
+      this.$nextTick(() => this.$refs.pwField && this.$refs.pwField.focus());
+    },
+
+    submitPassword() {
+      if (this.pwInput === '1234') {
         this.parentMode = true;
         this.adminUnlocked = true;
+        this.showPwDialog = false;
+      } else {
+        this.pwError = 'パスワードが違います';
+        this.pwInput = '';
       }
     },
 
