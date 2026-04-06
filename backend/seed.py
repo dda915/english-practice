@@ -1,6 +1,21 @@
 """初期データ投入スクリプト"""
-from .database import engine, SessionLocal, Base
+import sqlite3
+from .database import engine, SessionLocal, Base, DATABASE_URL
 from .models import Question, Child, Setting
+
+
+def _ensure_unit_number_column():
+    """unit_numberカラムがなければ追加（create_allより先に実行）"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(questions)")]
+        if cols and "unit_number" not in cols:
+            conn.execute("ALTER TABLE questions ADD COLUMN unit_number REAL NOT NULL DEFAULT 0")
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration in seed: {e}")
 
 
 DUMMY_QUESTIONS = [
@@ -38,6 +53,7 @@ DUMMY_QUESTIONS = [
 
 
 def seed():
+    _ensure_unit_number_column()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
