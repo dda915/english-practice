@@ -990,8 +990,9 @@ function app() {
 
         this.scoring = {};
         this.currentBatch = [];
+        await this.api(`/api/children/${this.currentChildId}/session`, { method: 'DELETE' });
+        this.hasActiveSession = false;
         await this.loadChildData();
-        await this.checkSession();
         await this.loadAllSummaries();
         this.tab = 'history';
       } finally {
