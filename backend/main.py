@@ -8,9 +8,7 @@ from .database import engine, Base, DATABASE_URL
 from .models import Question, Child, Answer, PointLog, Setting
 from .routers import questions, children, answers, points, settings
 
-Base.metadata.create_all(bind=engine)
-
-# マイグレーション: unit_numberカラム追加
+# マイグレーション: unit_numberカラム追加（create_allより前に実行）
 def _migrate_unit_number():
     try:
         db_path = DATABASE_URL.replace("sqlite:///", "")
@@ -24,6 +22,7 @@ def _migrate_unit_number():
         print(f"Migration warning: {e}")
 
 _migrate_unit_number()
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="和文英訳トレーニング")
 
