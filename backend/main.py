@@ -12,13 +12,16 @@ Base.metadata.create_all(bind=engine)
 
 # マイグレーション: unit_numberカラム追加
 def _migrate_unit_number():
-    db_path = DATABASE_URL.replace("sqlite:///", "")
-    conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(questions)")]
-    if "unit_number" not in cols:
-        conn.execute("ALTER TABLE questions ADD COLUMN unit_number REAL NOT NULL DEFAULT 0")
-        conn.commit()
-    conn.close()
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(questions)")]
+        if "unit_number" not in cols:
+            conn.execute("ALTER TABLE questions ADD COLUMN unit_number REAL NOT NULL DEFAULT 0")
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning: {e}")
 
 _migrate_unit_number()
 
