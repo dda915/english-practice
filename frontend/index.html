@@ -761,7 +761,8 @@ function app() {
       await this.loadChildren();
       await this.loadSettings();
       if (this.children.length > 0) {
-        this.currentChildId = this.children[0].id;
+        const saved = localStorage.getItem('lastChildId');
+        this.currentChildId = saved && this.children.find(c => c.id == saved) ? Number(saved) : this.children[0].id;
         await this.loadChildData();
         await this.checkSession();
         await this.loadAllSummaries();
@@ -831,6 +832,7 @@ function app() {
     },
 
     async switchChild() {
+      localStorage.setItem('lastChildId', this.currentChildId);
       this.currentBatch = [];
       this.scoring = {};
       this.exchangeMoney = null;
