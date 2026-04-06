@@ -40,18 +40,6 @@ def serve_index():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
-# 一時的: ローカルDBをRenderにアップロード用（使用後削除すること）
-from fastapi import UploadFile, File
-
-@app.post("/upload-db")
-async def upload_db(file: UploadFile = File(...)):
-    db_path = DATABASE_URL.replace("sqlite:///", "")
-    content = await file.read()
-    with open(db_path, "wb") as f:
-        f.write(content)
-    return {"ok": True, "size": len(content)}
-
-
 
 
 
