@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Text, Boolean, Date, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, Text, Boolean, Date, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -7,6 +7,7 @@ class Question(Base):
     __tablename__ = "questions"
 
     id = Column(Integer, primary_key=True)
+    unit_number = Column(Float, nullable=False, default=0, index=True)
     number = Column(Integer, nullable=False, unique=True, index=True)
     japanese = Column(Text, nullable=False)
     english = Column(Text, nullable=False)

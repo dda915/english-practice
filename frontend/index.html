@@ -426,11 +426,11 @@
     <template x-if="currentBatch.length > 0">
       <div class="card no-print" style="margin-top:8px;">
         <div style="font-size:13px; color:var(--text-sub); margin-bottom:12px; font-weight:500;">
-          <span x-text="currentChildName"></span>: &#x554F;&#x984C; <span x-text="currentBatch[0].number"></span> &#x301C; <span x-text="currentBatch[currentBatch.length-1].number"></span>
+          <span x-text="currentChildName"></span>: &#x5358;&#x5143;<span x-text="currentBatch[0].unit_number"></span> &#x301C; &#x5358;&#x5143;<span x-text="currentBatch[currentBatch.length-1].unit_number"></span>
         </div>
         <template x-for="q in currentBatch" :key="q.id">
           <div class="q-item">
-            <div class="q-number">&#x554F; <span x-text="q.number"></span></div>
+            <div class="q-number">&#x5358;&#x5143;<span x-text="q.unit_number"></span> / &#x554F;<span x-text="q.number"></span></div>
             <div class="q-japanese" x-text="q.japanese"></div>
           </div>
         </template>
@@ -454,7 +454,7 @@
       </div>
       <template x-for="q in currentBatch" :key="'pq'+q.id">
         <div class="q-print-item">
-          <div class="q-print-number">&#x554F; <span x-text="q.number"></span></div>
+          <div class="q-print-number">&#x5358;&#x5143;<span x-text="q.unit_number"></span> / &#x554F;<span x-text="q.number"></span></div>
           <div class="q-print-jp" x-text="q.japanese"></div>
           <div class="q-print-answer-space"></div>
         </div>
@@ -466,7 +466,7 @@
       </div>
       <template x-for="q in currentBatch" :key="'pa'+q.id">
         <div class="ans-item">
-          <div class="ans-number">&#x554F; <span x-text="q.number"></span></div>
+          <div class="ans-number">&#x5358;&#x5143;<span x-text="q.unit_number"></span> / &#x554F;<span x-text="q.number"></span></div>
           <div class="ans-jp" x-text="q.japanese"></div>
           <div class="ans-en" x-text="q.english"></div>
         </div>
@@ -487,7 +487,7 @@
           <template x-for="q in currentBatch" :key="'s'+q.id">
             <div class="score-row">
               <div class="score-text">
-                <div class="q-number">&#x554F; <span x-text="q.number"></span></div>
+                <div class="q-number">&#x5358;&#x5143;<span x-text="q.unit_number"></span> / &#x554F;<span x-text="q.number"></span></div>
                 <div class="q-japanese" x-text="q.japanese"></div>
                 <div class="answer-text" x-text="q.english"></div>
               </div>
@@ -524,6 +524,7 @@
       <table class="history-table">
         <thead>
           <tr>
+            <th style="width:50px">&#x5358;&#x5143;</th>
             <th style="width:50px">No.</th>
             <th>&#x554F;&#x984C;</th>
             <th style="width:80px">&#x6B63;&#x7B54;&#x7387;</th>
@@ -534,6 +535,7 @@
         <tbody>
           <template x-for="q in filteredProgress()" :key="'h'+q.question_id">
             <tr>
+              <td style="font-weight:600; color:var(--text-sub);" x-text="q.unit_number"></td>
               <td style="font-weight:600; color:var(--text-sub);" x-text="q.number"></td>
               <td>
                 <div x-text="q.japanese" style="font-size:13.5px;"></div>

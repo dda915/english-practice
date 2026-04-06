@@ -86,6 +86,6 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
     return {
         "total": len(body.answers),
         "correct": correct_count,
-        "newly_cleared": [{"id": q.id, "number": q.number} for q in newly_cleared],
+        "newly_cleared": [{"id": q.id, "unit_number": q.unit_number, "number": q.number} for q in newly_cleared],
         "points_earned": earned,
     }

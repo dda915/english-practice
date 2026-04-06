@@ -62,7 +62,7 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
-    questions = db.query(Question).order_by(Question.number).all()
+    questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
     answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
 
     # Group answers by question
@@ -86,6 +86,7 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
 
         result.append({
             "question_id": q.id,
+            "unit_number": q.unit_number,
             "number": q.number,
             "japanese": q.japanese,
             "english": q.english,
@@ -117,7 +118,7 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
                     remaining.append(q)
         if remaining:
             return [
-                {"id": q.id, "number": q.number, "japanese": q.japanese, "english": q.english}
+                {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english}
                 for q in remaining
             ]
         # 全部クリア済みならセッション削除して新規作成へ
@@ -125,7 +126,7 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
         db.flush()
 
     # 新規セッション作成
-    questions = db.query(Question).order_by(Question.number).all()
+    questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
     uncleared = [q for q in questions if q.id not in cleared]
     batch = uncleared[:size]
 
@@ -135,7 +136,7 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
         db.commit()
 
     return [
-        {"id": q.id, "number": q.number, "japanese": q.japanese, "english": q.english}
+        {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english}
         for q in batch
     ]
 
@@ -156,7 +157,7 @@ def get_session(child_id: int, db: Session = Depends(get_db)):
         if q:
             is_cleared = qid in cleared
             questions.append({
-                "id": q.id, "number": q.number,
+                "id": q.id, "unit_number": q.unit_number, "number": q.number,
                 "japanese": q.japanese, "english": q.english,
                 "cleared": is_cleared,
             })

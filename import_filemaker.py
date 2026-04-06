@@ -63,6 +63,11 @@ def import_mondai(db, path: str) -> dict[str, int]:
         except ValueError:
             continue
 
+        try:
+            unit_number = float(row[0].strip())
+        except ValueError:
+            unit_number = 0
+
         japanese = row[1].strip()
         english = row[2].strip()
         uuid = row[3].strip()
@@ -74,10 +79,11 @@ def import_mondai(db, path: str) -> dict[str, int]:
         if existing:
             existing.japanese = japanese
             existing.english = english
+            existing.unit_number = unit_number
             uuid_to_id[uuid] = existing.id
             updated += 1
         else:
-            q = Question(number=number, japanese=japanese, english=english)
+            q = Question(number=number, unit_number=unit_number, japanese=japanese, english=english)
             db.add(q)
             db.flush()
             uuid_to_id[uuid] = q.id

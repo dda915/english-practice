@@ -10,9 +10,9 @@ router = APIRouter(prefix="/api/questions", tags=["questions"])
 
 @router.get("")
 def list_questions(db: Session = Depends(get_db)):
-    qs = db.query(Question).order_by(Question.number).all()
+    qs = db.query(Question).order_by(Question.unit_number, Question.number).all()
     return [
-        {"id": q.id, "number": q.number, "japanese": q.japanese, "english": q.english}
+        {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english}
         for q in qs
     ]
 
