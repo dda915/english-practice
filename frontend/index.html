@@ -305,6 +305,7 @@
     .print-question-sheet .q-print-number { font-size: 11px; font-weight: 700; color: #666; margin-bottom: 2px; }
     .print-question-sheet .q-print-jp { font-size: 14px; margin-bottom: 8px; }
     .print-question-sheet .q-print-answer-space { border: 1px solid #ccc; border-radius: 4px; min-height: 48px; margin-bottom: 4px; }
+    .print-question-sheet .q-print-answer-space.tall { min-height: 96px; }
     .print-answer-sheet .ans-item { padding: 6px 0; border-bottom: 1px solid #eee; page-break-inside: avoid; }
     .print-answer-sheet .ans-number { font-size: 11px; font-weight: 700; color: #666; }
     .print-answer-sheet .ans-jp { font-size: 12px; color: #888; }
@@ -489,7 +490,7 @@
         <div class="q-print-item">
           <div class="q-print-number">&#x5358;&#x5143;<span x-text="q.unit_number"></span> / &#x554F;<span x-text="q.number"></span></div>
           <div class="q-print-jp" x-text="q.japanese"></div>
-          <div class="q-print-answer-space"></div>
+          <div class="q-print-answer-space" :class="(q.japanese.includes('はい') || q.japanese.includes('いいえ')) && 'tall'"></div>
         </div>
       </template>
     </div>
