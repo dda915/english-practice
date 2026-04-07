@@ -1,6 +1,11 @@
 {
+  "id": "/",
   "name": "PaePae",
   "short_name": "PaePae",
+  "description": "和文英訳トレーニングアプリ",
+  "lang": "ja",
+  "dir": "ltr",
+  "categories": ["education"],
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
