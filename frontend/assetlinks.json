@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.onrender.english_practice_5285.twa",
+    "sha256_cert_fingerprints": ["0A:29:C2:85:DD:0B:6C:3E:3B:29:FE:C7:60:52:14:A2:AA:E1:74:36:15:09:8B:96:A1:3A:BC:61:33:1B:82:68"]
+  }
+}]

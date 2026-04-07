@@ -60,6 +60,11 @@ def serve_icon_512():
     return FileResponse(FRONTEND_DIR / "icon-512.png", media_type="image/png")
 
 
+@app.get("/.well-known/assetlinks.json")
+def serve_assetlinks():
+    return FileResponse(FRONTEND_DIR / "assetlinks.json", media_type="application/json")
+
+
 
 
 
