@@ -95,6 +95,7 @@
     transition: all 0.15s;
   }
   .child-select:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-light); }
+  @media (max-width: 640px) { .hide-mobile { display: none !important; } }
   .nav-points {
     display: flex; align-items: center; gap: 6px;
     background: var(--gold-bg); border: 1px solid var(--gold-border);
@@ -398,8 +399,8 @@
   <!-- ══ Practice ══ -->
   <div x-show="tab === 'practice'" class="fade-in">
 
-    <!-- Summary cards for all children -->
-    <div class="summary-grid no-print">
+    <!-- Summary cards for all children (PCのみ表示、スマホはヘッダーのドロップダウンで切替) -->
+    <div class="summary-grid no-print hide-mobile">
       <template x-for="c in children" :key="'sum'+c.id">
         <div class="summary-card" :class="currentChildId == c.id && 'active'"
           @click="currentChildId = c.id; switchChild();">
