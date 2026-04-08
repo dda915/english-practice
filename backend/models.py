@@ -67,6 +67,15 @@ class ActiveSession(Base):
     child = relationship("Child")
 
 
+class SessionPhoto(Base):
+    __tablename__ = "session_photos"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("active_sessions.id"), nullable=False, index=True)
+    filename = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+
+
 class ExchangeRequest(Base):
     __tablename__ = "exchange_requests"
 

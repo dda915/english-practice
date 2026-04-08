@@ -137,6 +137,23 @@
   .q-number { font-size: 11px; font-weight: 600; color: var(--text-sub); margin-bottom: 4px; letter-spacing: 0.05em; }
   .q-japanese { font-size: 15px; font-weight: 500; line-height: 1.8; }
 
+  /* ─── スワイプカードUI ─── */
+  .swipe-wrap { min-height: 360px; display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
+  .swipe-progress { font-size: 13px; color: var(--text-sub); margin-bottom: 12px; text-align: center; font-weight: 500; }
+  .swipe-card { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 24px 16px; min-height: 260px; }
+  .swipe-qnum { font-size: 13px; color: var(--text-sub); margin-bottom: 16px; font-weight: 500; }
+  .swipe-qjp { font-size: 22px; font-weight: 600; line-height: 1.7; max-width: 560px; }
+  .swipe-photo-card { gap: 8px; }
+  .photo-btn { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 140px; height: 140px; border: 2px dashed var(--gold); border-radius: 16px; cursor: pointer; color: var(--gold); background: var(--gold-bg); }
+  .photo-thumbs { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+  .photo-thumb { position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; background: #f5f5f5; border: 1px solid #ddd; }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+  .photo-del { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(0,0,0,0.6); color: white; font-size: 14px; line-height: 1; cursor: pointer; padding: 0; }
+  .photo-add { display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--text-sub); cursor: pointer; border: 2px dashed #ccc; background: #fafafa; }
+  .swipe-nav { display: flex; justify-content: space-between; margin-top: 16px; gap: 12px; }
+  .swipe-arrow { flex: 1; padding: 12px; font-size: 20px; border: 1px solid #ddd; background: white; border-radius: 8px; cursor: pointer; }
+  .swipe-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 10px 20px; border-radius: 6px; font-size: 13.5px;
@@ -463,7 +480,62 @@
       </div>
     </div>
 
-    <template x-if="currentBatch.length > 0">
+    <!-- 子供モード: スワイプカードUI -->
+    <template x-if="currentBatch.length > 0 && !parentMode">
+      <div class="card no-print swipe-wrap" style="margin-top:8px;"
+           @touchstart.passive="onTouchStart($event)" @touchend.passive="onTouchEnd($event)">
+        <div class="swipe-progress">
+          <span x-text="Math.min(cardIndex + 1, currentBatch.length)"></span> / <span x-text="currentBatch.length"></span>
+          <span x-show="isPhotoCard" style="margin-left:8px; color:var(--gold);">&#x1F4F7; 答案を撮影</span>
+        </div>
+
+        <!-- 問題カード -->
+        <template x-for="(q, i) in currentBatch" :key="'sc'+q.id">
+          <div class="swipe-card" x-show="cardIndex === i">
+            <div class="swipe-qnum">&#x5358;&#x5143;<span x-text="q.unit_number"></span> / &#x554F;<span x-text="q.number"></span></div>
+            <div class="swipe-qjp" x-text="q.japanese"></div>
+          </div>
+        </template>
+
+        <!-- 撮影カード（11枚目） -->
+        <div class="swipe-card swipe-photo-card" x-show="isPhotoCard">
+          <div style="font-size:15px; color:var(--text-sub); margin-bottom:16px;">
+            ノートに書いた答えを撮影しよう
+          </div>
+          <label class="photo-btn">
+            <input type="file" accept="image/*" capture="environment" @change="onPhotoPicked($event)" style="display:none;">
+            <span style="font-size:48px;">&#x1F4F7;</span>
+            <div style="font-size:13px; margin-top:4px;">タップして撮影</div>
+          </label>
+
+          <div class="photo-thumbs" x-show="photos.length > 0">
+            <template x-for="p in photos" :key="'ph'+p.id">
+              <div class="photo-thumb">
+                <img :src="p.url" @click="window.open(p.url, '_blank')">
+                <button class="photo-del" @click="deletePhoto(p)" title="削除">&#x00D7;</button>
+              </div>
+            </template>
+            <label class="photo-thumb photo-add">
+              <input type="file" accept="image/*" capture="environment" @change="onPhotoPicked($event)" style="display:none;">
+              <span>&#x002B;</span>
+            </label>
+          </div>
+
+          <button class="btn btn-primary" style="margin-top:16px;" :disabled="photos.length === 0"
+                  @click="alert('採点機能はPhase 2で実装されます（現在は写真アップロードのみ）')">
+            この写真で採点する
+          </button>
+        </div>
+
+        <div class="swipe-nav">
+          <button class="swipe-arrow" @click="swipePrev()" :disabled="cardIndex === 0">&#x2190;</button>
+          <button class="swipe-arrow" @click="swipeNext()" :disabled="cardIndex >= totalCards - 1">&#x2192;</button>
+        </div>
+      </div>
+    </template>
+
+    <!-- 保護者モード: 一覧（印刷用に残す） -->
+    <template x-if="currentBatch.length > 0 && parentMode">
       <div class="card no-print" style="margin-top:8px;">
         <div style="font-size:13px; color:var(--text-sub); margin-bottom:12px; font-weight:500;">
           <span x-text="currentChildName"></span>: &#x5358;&#x5143;<span x-text="currentBatch[0].unit_number"></span> &#x301C; &#x5358;&#x5143;<span x-text="currentBatch[currentBatch.length-1].unit_number"></span>
@@ -765,6 +837,11 @@ function app() {
     children: [],
     currentChildId: null,
     currentBatch: [],
+    currentSessionId: null,
+    cardIndex: 0,
+    photos: [],
+    touchStartX: null,
+    touchStartY: null,
     batchSize: 10,
     scoring: {},
     hasActiveSession: false,
@@ -877,6 +954,9 @@ function app() {
     async switchChild() {
       localStorage.setItem('lastChildId', this.currentChildId);
       this.currentBatch = [];
+      this.currentSessionId = null;
+      this.cardIndex = 0;
+      this.photos = [];
       this.scoring = {};
       this.exchangeMoney = null;
       this.exchangePhone = null;
@@ -900,7 +980,14 @@ function app() {
       this.loading = true;
       await this.loadSettings();
       try {
-        this.currentBatch = await this.api(`/api/children/${this.currentChildId}/batch?size=${this.batchSize}`);
+        const res = await this.api(`/api/children/${this.currentChildId}/batch?size=${this.batchSize}`);
+        this.currentBatch = res.questions || [];
+        this.currentSessionId = res.session_id || null;
+        this.cardIndex = 0;
+        this.photos = [];
+        if (this.currentSessionId) {
+          try { this.photos = await this.api(`/api/sessions/${this.currentSessionId}/photos`); } catch (e) {}
+        }
         this.scoring = {};
         this.currentBatch.forEach(q => { this.scoring[q.id] = null; });
         this.hasActiveSession = false;
@@ -956,7 +1043,71 @@ function app() {
       await this.api(`/api/children/${this.currentChildId}/session`, { method: 'DELETE' });
       this.hasActiveSession = false;
       this.currentBatch = [];
+      this.currentSessionId = null;
+      this.cardIndex = 0;
+      this.photos = [];
       this.scoring = {};
+    },
+
+    // ─── スワイプカードUI ───
+    get totalCards() {
+      // 問題カード + 撮影カード（1枚）
+      return this.currentBatch.length > 0 ? this.currentBatch.length + 1 : 0;
+    },
+    get isPhotoCard() {
+      return this.currentBatch.length > 0 && this.cardIndex === this.currentBatch.length;
+    },
+    swipeNext() {
+      if (this.cardIndex < this.totalCards - 1) this.cardIndex++;
+    },
+    swipePrev() {
+      if (this.cardIndex > 0) this.cardIndex--;
+    },
+    onTouchStart(e) {
+      const t = e.changedTouches[0];
+      this.touchStartX = t.clientX;
+      this.touchStartY = t.clientY;
+    },
+    onTouchEnd(e) {
+      if (this.touchStartX === null) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - this.touchStartX;
+      const dy = t.clientY - this.touchStartY;
+      this.touchStartX = null;
+      this.touchStartY = null;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+      if (dx < 0) this.swipeNext(); else this.swipePrev();
+    },
+
+    async onPhotoPicked(ev) {
+      const files = Array.from(ev.target.files || []);
+      ev.target.value = '';
+      if (!this.currentSessionId) {
+        alert('セッションがありません。もう一度「次の問題を出題」を押してください。');
+        return;
+      }
+      for (const f of files) {
+        const fd = new FormData();
+        fd.append('file', f);
+        try {
+          const res = await fetch(`/api/sessions/${this.currentSessionId}/photos`, { method: 'POST', body: fd });
+          if (!res.ok) throw new Error('upload failed');
+          const photo = await res.json();
+          this.photos.push(photo);
+        } catch (e) {
+          alert('写真のアップロードに失敗しました: ' + e.message);
+        }
+      }
+    },
+
+    async deletePhoto(photo) {
+      if (!confirm('この写真を削除しますか？')) return;
+      try {
+        await this.api(`/api/sessions/${photo.session_id}/photos/${photo.id}`, { method: 'DELETE' });
+        this.photos = this.photos.filter(p => p.id !== photo.id);
+      } catch (e) {
+        alert('削除に失敗しました');
+      }
     },
 
     printQuestions() {

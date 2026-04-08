@@ -98,6 +98,16 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
     return result
 
 
+def _session_response(session: ActiveSession, questions: list[Question]):
+    return {
+        "session_id": session.id,
+        "questions": [
+            {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english}
+            for q in questions
+        ],
+    }
+
+
 @router.get("/{child_id}/batch")
 def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
@@ -117,10 +127,7 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
                 if q:
                     remaining.append(q)
         if remaining:
-            return [
-                {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english}
-                for q in remaining
-            ]
+            return _session_response(session, remaining)
         # 全部クリア済みならセッション削除して新規作成へ
         db.delete(session)
         db.flush()
@@ -132,13 +139,13 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
 
     if batch:
         qids = [q.id for q in batch]
-        db.add(ActiveSession(child_id=child_id, question_ids=json.dumps(qids)))
+        new_session = ActiveSession(child_id=child_id, question_ids=json.dumps(qids))
+        db.add(new_session)
         db.commit()
+        db.refresh(new_session)
+        return _session_response(new_session, batch)
 
-    return [
-        {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english}
-        for q in batch
-    ]
+    return {"session_id": None, "questions": []}
 
 
 @router.get("/{child_id}/session")
@@ -164,7 +171,7 @@ def get_session(child_id: int, db: Session = Depends(get_db)):
             if not is_cleared:
                 remaining += 1
 
-    return {"active": True, "total": len(qids), "remaining": remaining, "questions": questions}
+    return {"active": True, "session_id": session.id, "total": len(qids), "remaining": remaining, "questions": questions}
 
 
 @router.delete("/{child_id}/session")
