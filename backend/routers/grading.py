@@ -677,6 +677,73 @@ async function submit(correct) {{
     return html
 
 
+# ─── API利用状況 ───
+
+# claude-sonnet-4-5 価格 (USD per 1M tokens)
+PRICE_INPUT_USD_PER_MTOK = 3.0
+PRICE_OUTPUT_USD_PER_MTOK = 15.0
+USD_TO_JPY = 155.0
+
+
+@router.get("/api/admin/api-usage")
+def api_usage(db: Session = Depends(get_db)):
+    """子供ごと・月ごとの採点回数・チャット往復・トークン・推定コスト"""
+    children = db.query(Child).order_by(Child.id).all()
+
+    # 月キー -> child_id -> 集計
+    result = {}
+
+    batches = db.query(GradingBatch).all()
+    for b in batches:
+        ym = b.created_at.strftime("%Y-%m")
+        key = (ym, b.child_id)
+        d = result.setdefault(key, {"grading_count": 0, "chat_count": 0, "input_tokens": 0, "output_tokens": 0})
+        d["grading_count"] += 1
+        d["input_tokens"] += b.input_tokens
+        d["output_tokens"] += b.output_tokens
+
+    # ChatMessage は assistant 行のみカウント＋トークン集計
+    chat_msgs = (
+        db.query(ChatMessage, Grading, GradingBatch)
+        .join(Grading, ChatMessage.grading_id == Grading.id)
+        .join(GradingBatch, Grading.batch_id == GradingBatch.id)
+        .filter(ChatMessage.role == "assistant")
+        .all()
+    )
+    for cm, g, b in chat_msgs:
+        ym = cm.created_at.strftime("%Y-%m")
+        key = (ym, b.child_id)
+        d = result.setdefault(key, {"grading_count": 0, "chat_count": 0, "input_tokens": 0, "output_tokens": 0})
+        d["chat_count"] += 1
+        d["input_tokens"] += cm.input_tokens
+        d["output_tokens"] += cm.output_tokens
+
+    rows = []
+    child_name_map = {c.id: c.name for c in children}
+    for (ym, cid), d in result.items():
+        cost_usd = (
+            d["input_tokens"] / 1_000_000 * PRICE_INPUT_USD_PER_MTOK
+            + d["output_tokens"] / 1_000_000 * PRICE_OUTPUT_USD_PER_MTOK
+        )
+        rows.append({
+            "month": ym,
+            "child_id": cid,
+            "child_name": child_name_map.get(cid, f"#{cid}"),
+            "grading_count": d["grading_count"],
+            "chat_count": d["chat_count"],
+            "input_tokens": d["input_tokens"],
+            "output_tokens": d["output_tokens"],
+            "estimated_cost_jpy": round(cost_usd * USD_TO_JPY, 1),
+        })
+    rows.sort(key=lambda r: (r["month"], r["child_id"]), reverse=True)
+    return {
+        "model": CLAUDE_MODEL,
+        "price_usd_per_mtok": {"input": PRICE_INPUT_USD_PER_MTOK, "output": PRICE_OUTPUT_USD_PER_MTOK},
+        "usd_to_jpy": USD_TO_JPY,
+        "rows": rows,
+    }
+
+
 @router.get("/api/gradings/batch/{batch_id}")
 def get_batch(batch_id: int, db: Session = Depends(get_db)):
     batch = db.query(GradingBatch).get(batch_id)

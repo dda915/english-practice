@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
-from ..models import Child, Answer, Question, PointLog, ActiveSession, SessionPhoto
+from ..models import Child, Answer, Question, PointLog, ActiveSession, SessionPhoto, Grading, GradingBatch, ChatMessage, Message
 from .photos import PHOTO_DIR
 
 router = APIRouter(prefix="/api/children", tags=["children"])
@@ -173,6 +173,84 @@ def get_session(child_id: int, db: Session = Depends(get_db)):
                 remaining += 1
 
     return {"active": True, "session_id": session.id, "total": len(qids), "remaining": remaining, "questions": questions}
+
+
+@router.get("/{child_id}/questions/{question_id}/detail")
+def get_question_detail(child_id: int, question_id: int, db: Session = Depends(get_db)):
+    """問題詳細画面：解答履歴・採点AIコメント・AIチャット・メッセージを集約"""
+    child = db.query(Child).get(child_id)
+    if not child:
+        raise HTTPException(404, "子供が見つかりません")
+    q = db.query(Question).get(question_id)
+    if not q:
+        raise HTTPException(404, "問題が見つかりません")
+
+    answers = (
+        db.query(Answer)
+        .filter(Answer.child_id == child_id, Answer.question_id == question_id)
+        .order_by(Answer.id)
+        .all()
+    )
+    history = [{"date": a.answered_date.isoformat(), "correct": a.correct} for a in answers]
+
+    # この子供のこの問題に対する全 grading（AIコメント＋チャット履歴）
+    gradings = (
+        db.query(Grading)
+        .join(GradingBatch, Grading.batch_id == GradingBatch.id)
+        .filter(GradingBatch.child_id == child_id, Grading.question_id == question_id)
+        .order_by(Grading.id)
+        .all()
+    )
+    grading_list = []
+    for g in gradings:
+        chat_msgs = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.grading_id == g.id)
+            .order_by(ChatMessage.id)
+            .all()
+        )
+        grading_list.append({
+            "id": g.id,
+            "created_at": g.created_at.isoformat(),
+            "ai_reading": g.ai_reading,
+            "ai_correct": g.ai_correct,
+            "ai_comment": g.ai_comment,
+            "status": g.status,
+            "final_correct": g.final_correct,
+            "parent_comment": g.parent_comment or "",
+            "chat": [{"role": m.role, "content": m.content, "created_at": m.created_at.isoformat()} for m in chat_msgs],
+        })
+
+    msgs = (
+        db.query(Message)
+        .filter(Message.child_id == child_id, Message.question_id == question_id)
+        .order_by(Message.id)
+        .all()
+    )
+    message_list = [
+        {
+            "id": m.id,
+            "sender": m.sender,
+            "body": m.body,
+            "created_at": m.created_at.isoformat(),
+            "read_by_parent": m.read_by_parent,
+            "read_by_child": m.read_by_child,
+        }
+        for m in msgs
+    ]
+
+    return {
+        "question": {
+            "id": q.id,
+            "number": q.number,
+            "unit_number": q.unit_number,
+            "japanese": q.japanese,
+            "english": q.english,
+        },
+        "history": history,
+        "gradings": grading_list,
+        "messages": message_list,
+    }
 
 
 @router.delete("/{child_id}/session")

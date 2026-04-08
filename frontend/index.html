@@ -205,6 +205,12 @@
   .msg-meta { font-size: 10px; opacity: 0.6; margin-top: 4px; }
   .msg-compose { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eee; }
 
+  /* ─── 問題詳細モーダル ─── */
+  .qdetail-modal { background: white; max-width: 640px; width: 92%; max-height: 88vh; overflow-y: auto; border-radius: 12px; padding: 20px; margin: 24px auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+  .qdetail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee; margin-bottom: 16px; }
+  .qdetail-section { margin-bottom: 20px; }
+  .qdetail-label { font-size: 11px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 10px 20px; border-radius: 6px; font-size: 13.5px;
@@ -425,6 +431,86 @@
       <button class="btn btn-outline" @click="showPwDialog = false">&#x30AD;&#x30E3;&#x30F3;&#x30BB;&#x30EB;</button>
       <button class="btn btn-primary" @click="submitPassword()">OK</button>
     </div>
+  </div>
+</div>
+
+<!-- 問題詳細モーダル -->
+<div class="pw-overlay" x-show="qDetail" x-cloak @keydown.escape.window="closeQuestionDetail()" style="overflow-y:auto;">
+  <div class="qdetail-modal" @click.outside="closeQuestionDetail()" x-show="qDetail">
+    <template x-if="qDetail">
+      <div>
+        <div class="qdetail-head">
+          <div>
+            <div style="font-size:12px; color:var(--text-sub);">単元<span x-text="qDetail.question.unit_number"></span> / 問<span x-text="qDetail.question.number"></span></div>
+            <div style="font-size:18px; font-weight:700; margin-top:4px;" x-text="qDetail.question.japanese"></div>
+          </div>
+          <button class="notif-close" @click="closeQuestionDetail()" style="font-size:22px;">✕</button>
+        </div>
+
+        <div class="qdetail-section">
+          <div class="qdetail-label">模範解答</div>
+          <div style="font-style:italic; padding:8px 12px; background:#f0f7ff; border-left:3px solid #5b8def; border-radius:4px;" x-text="qDetail.question.english"></div>
+        </div>
+
+        <div class="qdetail-section">
+          <div class="qdetail-label">解答履歴 (<span x-text="qDetail.history.length"></span>回)</div>
+          <div x-show="qDetail.history.length === 0" style="font-size:13px; color:var(--text-sub);">まだ解答していません</div>
+          <div class="history-dots">
+            <template x-for="(h, i) in qDetail.history" :key="'qd'+i">
+              <div class="history-dot" :class="h.correct ? 'badge-correct' : 'badge-wrong'" :title="formatDate(h.date)" x-text="h.correct ? '○' : '×'"></div>
+            </template>
+          </div>
+        </div>
+
+        <div class="qdetail-section" x-show="qDetail.gradings.length > 0">
+          <div class="qdetail-label">AI採点履歴</div>
+          <template x-for="g in qDetail.gradings" :key="'qdg'+g.id">
+            <div style="margin-bottom:12px; padding:12px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-size:11px; color:var(--text-sub);" x-text="formatDate(g.created_at)"></span>
+                <span style="font-size:18px; font-weight:bold;" :style="g.ai_correct ? 'color:#2e7d32' : 'color:#c62828'" x-text="g.ai_correct ? '○' : '×'"></span>
+              </div>
+              <div style="font-size:12px; color:var(--text-sub); margin-bottom:2px;">あなたの回答</div>
+              <div style="font-size:13px; font-style:italic; margin-bottom:6px;" x-text="g.ai_reading || '(読み取れませんでした)'"></div>
+              <div style="font-size:12px; color:var(--text-sub); margin-bottom:2px;">AIコメント</div>
+              <div style="font-size:13px; margin-bottom:6px;" x-text="g.ai_comment"></div>
+              <div x-show="g.parent_comment" style="font-size:12px; padding:6px 8px; background:#e8f5e9; border-radius:4px; margin-top:6px;">
+                📩 お父さんから: <span x-text="g.parent_comment"></span>
+              </div>
+              <div x-show="g.chat.length > 0" style="margin-top:8px; padding-top:8px; border-top:1px dashed #ddd;">
+                <div style="font-size:11px; color:var(--text-sub); margin-bottom:4px;">AIとのやりとり</div>
+                <template x-for="(cm, ci) in g.chat" :key="'qdgc'+g.id+'_'+ci">
+                  <div style="font-size:12px; margin:3px 0; padding:4px 8px; border-radius:4px;"
+                       :style="cm.role === 'user' ? 'background:#fff7d6;' : 'background:#fff;'">
+                    <strong x-text="cm.role === 'user' ? '娘:' : 'AI:'"></strong> <span x-text="cm.content"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div class="qdetail-section">
+          <div class="qdetail-label">この問題のメッセージ</div>
+          <div x-show="qDetail.messages.length === 0" style="font-size:13px; color:var(--text-sub);">メッセージはありません</div>
+          <div class="msg-log" style="max-height:240px;">
+            <template x-for="m in qDetail.messages" :key="'qdm'+m.id">
+              <div class="msg-item" :class="m.sender">
+                <div class="msg-bubble">
+                  <div class="msg-body" x-text="m.body"></div>
+                  <div class="msg-meta" x-text="formatDate(m.created_at)"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+          <div class="msg-compose">
+            <input type="text" class="chat-input" placeholder="この問題についてメッセージ…"
+                   x-model="qDetailNewMessage" @keydown.enter="sendQuestionMessage()">
+            <button class="btn btn-primary chat-send" @click="sendQuestionMessage()" :disabled="!qDetailNewMessage.trim()">送信</button>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </div>
 
@@ -782,7 +868,7 @@
         </thead>
         <tbody>
           <template x-for="q in filteredProgress()" :key="'h'+q.question_id">
-            <tr>
+            <tr style="cursor:pointer;" @click="openQuestionDetail(q.question_id)">
               <td style="font-weight:600; color:var(--text-sub);" x-text="q.unit_number"></td>
               <td style="font-weight:600; color:var(--text-sub);" x-text="q.number"></td>
               <td>
@@ -972,6 +1058,45 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">API利用状況 (Claude Sonnet 4.5)</div>
+        <button class="btn btn-outline btn-sm" @click="loadApiUsage()">更新</button>
+      </div>
+      <div x-show="apiUsage.rows.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+        まだ利用実績はありません
+      </div>
+      <table x-show="apiUsage.rows.length > 0" style="width:100%; font-size:12px; border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:left; color:var(--text-sub); border-bottom:1px solid var(--border-light);">
+            <th style="padding:6px 4px;">月</th>
+            <th>子供</th>
+            <th style="text-align:right;">採点</th>
+            <th style="text-align:right;">チャット</th>
+            <th style="text-align:right;">入力tok</th>
+            <th style="text-align:right;">出力tok</th>
+            <th style="text-align:right;">推定¥</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="r in apiUsage.rows" :key="'au'+r.month+'_'+r.child_id">
+            <tr style="border-bottom:1px solid var(--border-light);">
+              <td style="padding:6px 4px;" x-text="r.month"></td>
+              <td x-text="r.child_name"></td>
+              <td style="text-align:right;" x-text="r.grading_count"></td>
+              <td style="text-align:right;" x-text="r.chat_count"></td>
+              <td style="text-align:right;" x-text="r.input_tokens.toLocaleString()"></td>
+              <td style="text-align:right;" x-text="r.output_tokens.toLocaleString()"></td>
+              <td style="text-align:right; font-weight:600;" x-text="'¥' + r.estimated_cost_jpy"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <div style="font-size:10px; color:var(--text-sub); margin-top:8px;">
+        単価: input $<span x-text="apiUsage.price_usd_per_mtok.input"></span>/Mtok, output $<span x-text="apiUsage.price_usd_per_mtok.output"></span>/Mtok, 為替: ¥<span x-text="apiUsage.usd_to_jpy"></span>/$
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
       <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント・交換レート（全員共通）</div>
       <div class="config-row">
         <span class="config-label">1問クリア</span>
@@ -1040,6 +1165,9 @@ function app() {
     aiNotifications: [],
     messages: [],
     newMessageBody: '',
+    qDetail: null,
+    qDetailNewMessage: '',
+    apiUsage: { rows: [], price_usd_per_mtok: { input: 0, output: 0 }, usd_to_jpy: 0 },
     batchSize: 10,
     scoring: {},
     hasActiveSession: false,
@@ -1241,6 +1369,7 @@ function app() {
     openAdmin() {
       this.tab = 'admin';
       this.loadAwaitingParent();
+      this.loadApiUsage();
     },
 
     get unreadMessagesCount() {
@@ -1287,6 +1416,48 @@ function app() {
       } catch (e) {
         alert('送信失敗: ' + e.message);
       }
+    },
+
+    async openQuestionDetail(questionId) {
+      if (!this.currentChildId) return;
+      try {
+        this.qDetail = await this.api(`/api/children/${this.currentChildId}/questions/${questionId}/detail`);
+        this.qDetailNewMessage = '';
+      } catch (e) {
+        alert('読み込み失敗: ' + e.message);
+      }
+    },
+
+    closeQuestionDetail() {
+      this.qDetail = null;
+      this.qDetailNewMessage = '';
+    },
+
+    async sendQuestionMessage() {
+      const text = (this.qDetailNewMessage || '').trim();
+      if (!text || !this.qDetail) return;
+      try {
+        const m = await this.api(`/api/children/${this.currentChildId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            body: text,
+            sender: this.parentMode ? 'parent' : 'child',
+            question_id: this.qDetail.question.id,
+          }),
+        });
+        this.qDetail.messages.push(m);
+        this.qDetailNewMessage = '';
+        // メッセージタブ側にも反映
+        this.messages.push(m);
+      } catch (e) {
+        alert('送信失敗: ' + e.message);
+      }
+    },
+
+    async loadApiUsage() {
+      try {
+        this.apiUsage = await this.api('/api/admin/api-usage');
+      } catch (e) {}
     },
 
     async loadAwaitingParent() {
