@@ -1305,6 +1305,8 @@ function app() {
     progressPercent: 0,
     summaryData: {},
     csvResult: null,
+    appVersion: null,
+    versionReloading: false,
 
     get currentChildName() {
       const c = this.children.find(c => c.id == this.currentChildId);
@@ -1312,6 +1314,13 @@ function app() {
     },
 
     async init() {
+      try {
+        const v = await this.api('/api/version');
+        this.appVersion = v.version;
+      } catch (e) {}
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.checkVersion();
+      });
       await this.loadQuestions();
       await this.loadChildren();
       await this.loadSettings();
@@ -1323,6 +1332,18 @@ function app() {
         await this.loadAllSummaries();
       }
       await this.checkPushStatus();
+    },
+
+    async checkVersion() {
+      if (!this.appVersion || this.versionReloading) return;
+      try {
+        const v = await this.api('/api/version');
+        if (v.version && v.version !== this.appVersion) {
+          this.versionReloading = true;
+          this.showToast('新しいバージョンがあります。更新します…');
+          setTimeout(() => location.reload(), 1200);
+        }
+      } catch (e) {}
     },
 
     async api(url, options = {}) {
@@ -1417,6 +1438,8 @@ function app() {
     },
 
     async generateBatch() {
+      await this.checkVersion();
+      if (this.versionReloading) return;
       this.loading = true;
       await this.loadSettings();
       try {
@@ -1978,6 +2001,8 @@ function app() {
 
     async spendPoints(type, amount) {
       if (!amount || amount <= 0 || amount > this.availablePoints) return;
+      await this.checkVersion();
+      if (this.versionReloading) return;
       this.loading = true;
       try {
         const result = await this.api(`/api/children/${this.currentChildId}/points/spend`, {

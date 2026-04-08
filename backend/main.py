@@ -1,4 +1,5 @@
 import asyncio
+import os
 from datetime import datetime, timedelta
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -57,6 +58,14 @@ app.include_router(messages.router)
 app.include_router(push.router)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
+
+APP_VERSION = os.environ.get("RENDER_GIT_COMMIT") or datetime.now().strftime("%Y%m%d%H%M%S")
+
+
+@app.get("/api/version")
+def get_version():
+    return {"version": APP_VERSION}
 
 
 @app.get("/")
