@@ -170,6 +170,20 @@
   .result-fb { display: flex; gap: 8px; margin-top: 16px; }
   .fb-btn { flex: 1; padding: 14px; font-size: 15px; }
 
+  /* ─── AIチャット ─── */
+  .chat-panel { margin-top: 16px; padding: 12px; background: #fafafa; border-radius: 8px; border: 1px solid #eee; }
+  .chat-log { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .chat-msg { display: flex; }
+  .chat-msg.user { justify-content: flex-end; }
+  .chat-msg.assistant { justify-content: flex-start; }
+  .chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+  .chat-msg.user .chat-bubble { background: var(--gold); color: white; border-bottom-right-radius: 4px; }
+  .chat-msg.assistant .chat-bubble { background: white; color: var(--text); border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
+  .chat-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .chat-input { flex: 1; padding: 10px 12px; font-size: 14px; border: 1px solid #ddd; border-radius: 8px; }
+  .chat-send { padding: 10px 16px; }
+  .chat-resolve { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eee; }
+
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 10px 20px; border-radius: 6px; font-size: 13.5px;
@@ -521,7 +535,7 @@
               <div class="result-label">AIコメント</div>
               <div class="result-comment" x-text="g.ai_comment"></div>
             </div>
-            <div class="result-fb">
+            <div class="result-fb" x-show="!g.showChat">
               <button class="btn btn-primary fb-btn" @click="submitFeedback('accept')">
                 <span x-text="g.ai_correct ? '✅ 納得' : '😊 納得'"></span>
               </button>
@@ -529,8 +543,32 @@
                 ❓ 質問がある
               </button>
             </div>
-            <div style="font-size:11px; color:var(--text-sub); text-align:center; margin-top:8px;">
-              （「質問がある」のAIチャットはPhase 3で実装予定。現在は「お父さんに確認してほしい」扱いになります）
+
+            <!-- AIチャット欄 -->
+            <div x-show="g.showChat" class="chat-panel">
+              <div class="chat-log">
+                <template x-for="(m, mi) in g.chatMessages || []" :key="'cm'+mi">
+                  <div class="chat-msg" :class="m.role">
+                    <div class="chat-bubble" x-text="m.content"></div>
+                  </div>
+                </template>
+                <div x-show="g.chatLoading" class="chat-msg assistant">
+                  <div class="chat-bubble">…</div>
+                </div>
+              </div>
+              <div class="chat-input-row">
+                <input type="text" class="chat-input" placeholder="質問を入力…"
+                       x-model="g.chatInput" @keydown.enter="sendChat()" :disabled="g.chatLoading">
+                <button class="btn btn-primary chat-send" @click="sendChat()" :disabled="g.chatLoading || !(g.chatInput && g.chatInput.trim())">送信</button>
+              </div>
+              <div class="chat-resolve">
+                <button class="btn btn-primary fb-btn" @click="resolveGrading('accept')" :disabled="g.chatLoading">
+                  ✅ 納得した
+                </button>
+                <button class="btn btn-outline fb-btn" @click="resolveGrading('escalate')" :disabled="g.chatLoading">
+                  📩 お父さんに確認してほしい
+                </button>
+              </div>
             </div>
           </div>
         </template>
@@ -1185,23 +1223,85 @@ function app() {
     async submitFeedback(feedback) {
       const g = this.gradings[this.resultIndex];
       if (!g) return;
+
+      if (feedback === 'question') {
+        // チャット欄を開く。バックエンドにも feedback='question' を記録（ステータスは変更しない）
+        g.showChat = true;
+        if (!g.chatMessages) g.chatMessages = [];
+        g.chatInput = g.chatInput || '';
+        try {
+          await this.api(`/api/gradings/${g.id}/feedback`, {
+            method: 'POST',
+            body: JSON.stringify({ feedback: 'question' }),
+          });
+          g.feedback = 'question';
+        } catch (e) {}
+        return;
+      }
+
+      // accept
       try {
         const res = await this.api(`/api/gradings/${g.id}/feedback`, {
           method: 'POST',
-          body: JSON.stringify({ feedback }),
+          body: JSON.stringify({ feedback: 'accept' }),
         });
         g.status = res.status;
-        g.feedback = feedback;
-        if (feedback === 'accept' && res.points_earned > 0) {
-          this.showToast(`+${res.points_earned}pt クリア！`);
-        }
-        if (this.resultIndex < this.gradings.length - 1) {
-          this.resultIndex++;
-        } else {
-          await this.finishGrading();
-        }
+        g.feedback = 'accept';
+        if (res.points_earned > 0) this.showToast(`+${res.points_earned}pt クリア！`);
+        await this.advanceResult();
       } catch (e) {
         alert('送信失敗: ' + e.message);
+      }
+    },
+
+    async sendChat() {
+      const g = this.gradings[this.resultIndex];
+      if (!g) return;
+      const text = (g.chatInput || '').trim();
+      if (!text) return;
+      if (!g.chatMessages) g.chatMessages = [];
+      g.chatMessages.push({ role: 'user', content: text });
+      g.chatInput = '';
+      g.chatLoading = true;
+      try {
+        const res = await this.api(`/api/gradings/${g.id}/chat`, {
+          method: 'POST',
+          body: JSON.stringify({ message: text }),
+        });
+        g.chatMessages.push({ role: 'assistant', content: res.assistant.content });
+      } catch (e) {
+        g.chatMessages.push({ role: 'assistant', content: '（エラー: ' + e.message + '）' });
+      } finally {
+        g.chatLoading = false;
+      }
+    },
+
+    async resolveGrading(action) {
+      const g = this.gradings[this.resultIndex];
+      if (!g) return;
+      try {
+        const res = await this.api(`/api/gradings/${g.id}/resolve`, {
+          method: 'POST',
+          body: JSON.stringify({ action }),
+        });
+        g.status = res.status;
+        if (action === 'accept' && res.points_earned > 0) {
+          this.showToast(`+${res.points_earned}pt クリア！`);
+        }
+        if (action === 'escalate') {
+          this.showToast('お父さんに連絡しました');
+        }
+        await this.advanceResult();
+      } catch (e) {
+        alert('送信失敗: ' + e.message);
+      }
+    },
+
+    async advanceResult() {
+      if (this.resultIndex < this.gradings.length - 1) {
+        this.resultIndex++;
+      } else {
+        await this.finishGrading();
       }
     },
 

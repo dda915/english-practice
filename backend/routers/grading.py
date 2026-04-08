@@ -16,6 +16,7 @@ from ..models import (
     SessionPhoto,
     GradingBatch,
     Grading,
+    ChatMessage,
     Answer,
     PointLog,
     Setting,
@@ -228,50 +229,167 @@ def submit_feedback(grading_id: int, body: FeedbackBody, db: Session = Depends(g
         raise HTTPException(500, "バッチが見つかりません")
 
     g.feedback = body.feedback
-
     result = {"id": g.id, "status": None, "points_earned": 0, "newly_cleared": False}
 
     if body.feedback == "accept":
-        # 納得 → 現在のAI判定で確定、Answer記録、ポイント付与
-        if g.status == "confirmed":
-            result["status"] = g.status
-            return result
-
-        was_cleared = _is_cleared(db, batch.child_id, g.question_id)
-        db.add(Answer(
-            child_id=batch.child_id,
-            question_id=g.question_id,
-            answered_date=datetime.now(),
-            correct=g.ai_correct,
-        ))
-        db.flush()
-        now_cleared = _is_cleared(db, batch.child_id, g.question_id)
-
-        g.status = "confirmed"
-        g.final_correct = g.ai_correct
-
-        if not was_cleared and now_cleared:
-            q = db.query(Question).get(g.question_id)
-            ppc_setting = db.query(Setting).get("points_per_clear")
-            points_per_clear = int(ppc_setting.value) if ppc_setting else 1
-            db.add(PointLog(
-                child_id=batch.child_id,
-                logged_date=datetime.now().date(),
-                amount=points_per_clear,
-                description=f"問{q.number} クリア",
-            ))
-            result["points_earned"] = points_per_clear
-            result["newly_cleared"] = True
-
+        earned, newly = _confirm_grading(db, g, batch, final_correct=g.ai_correct)
+        result["points_earned"] = earned
+        result["newly_cleared"] = newly
         db.commit()
         backup_to_dropbox()
     else:
-        # 質問がある → Phase 3でチャット実装予定。暫定で保留状態にする
-        g.status = "awaiting_parent"
+        # 質問がある → ステータスは変えず、フロント側でチャット欄を開く
         db.commit()
 
     result["status"] = g.status
     return result
+
+
+def _confirm_grading(db: Session, g: Grading, batch: GradingBatch, final_correct: bool):
+    """採点結果を確定してAnswer記録＋ポイント付与。(earned, newly_cleared)を返す。commit はしない。"""
+    if g.status in ("confirmed", "parent_confirmed"):
+        return 0, False
+    was_cleared = _is_cleared(db, batch.child_id, g.question_id)
+    db.add(Answer(
+        child_id=batch.child_id,
+        question_id=g.question_id,
+        answered_date=datetime.now(),
+        correct=final_correct,
+    ))
+    db.flush()
+    now_cleared = _is_cleared(db, batch.child_id, g.question_id)
+    g.status = "confirmed"
+    g.final_correct = final_correct
+    if not was_cleared and now_cleared:
+        q = db.query(Question).get(g.question_id)
+        ppc_setting = db.query(Setting).get("points_per_clear")
+        points_per_clear = int(ppc_setting.value) if ppc_setting else 1
+        db.add(PointLog(
+            child_id=batch.child_id,
+            logged_date=datetime.now().date(),
+            amount=points_per_clear,
+            description=f"問{q.number} クリア",
+        ))
+        return points_per_clear, True
+    return 0, False
+
+
+# ─── AIチャット ───
+
+class ChatBody(BaseModel):
+    message: str
+
+
+def _chat_system_prompt(g: Grading, q: Question) -> str:
+    return (
+        "あなたは小学生の英語学習を支援する優しい先生です。"
+        "ユーザーは1問の採点結果について質問しています。以下の情報を踏まえて、"
+        "丁寧に・短く（2〜4文程度）・小学生にわかる言葉で答えてください。専門用語は避け、励ましを添えること。\n\n"
+        f"【問題】{q.japanese}\n"
+        f"【模範解答】{q.english}\n"
+        f"【子供の回答（AIが画像から読み取ったもの）】{g.ai_reading}\n"
+        f"【AI判定】{'○ 正解' if g.ai_correct else '× 不正解'}\n"
+        f"【AIの最初のコメント】{g.ai_comment}\n"
+    )
+
+
+@router.get("/api/gradings/{grading_id}/chat")
+def get_chat(grading_id: int, db: Session = Depends(get_db)):
+    g = db.query(Grading).get(grading_id)
+    if not g:
+        raise HTTPException(404, "採点結果が見つかりません")
+    msgs = db.query(ChatMessage).filter(ChatMessage.grading_id == grading_id).order_by(ChatMessage.id).all()
+    return [
+        {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
+        for m in msgs
+    ]
+
+
+@router.post("/api/gradings/{grading_id}/chat")
+def post_chat(grading_id: int, body: ChatBody, db: Session = Depends(get_db)):
+    g = db.query(Grading).get(grading_id)
+    if not g:
+        raise HTTPException(404, "採点結果が見つかりません")
+    q = db.query(Question).get(g.question_id)
+    if not q:
+        raise HTTPException(404, "問題が見つかりません")
+
+    user_text = (body.message or "").strip()
+    if not user_text:
+        raise HTTPException(400, "メッセージが空です")
+
+    # 履歴を取得
+    history = db.query(ChatMessage).filter(ChatMessage.grading_id == grading_id).order_by(ChatMessage.id).all()
+    api_messages = [{"role": m.role, "content": m.content} for m in history]
+    api_messages.append({"role": "user", "content": user_text})
+
+    try:
+        from anthropic import Anthropic
+    except ImportError:
+        raise HTTPException(500, "anthropic パッケージがインストールされていません")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(500, "ANTHROPIC_API_KEY が設定されていません")
+
+    client = Anthropic(api_key=api_key)
+    msg = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=512,
+        system=_chat_system_prompt(g, q),
+        messages=api_messages,
+    )
+    reply = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text").strip()
+    in_tok = msg.usage.input_tokens
+    out_tok = msg.usage.output_tokens
+
+    now = datetime.now()
+    user_msg = ChatMessage(grading_id=grading_id, role="user", content=user_text, created_at=now)
+    assistant_msg = ChatMessage(
+        grading_id=grading_id, role="assistant", content=reply,
+        input_tokens=in_tok, output_tokens=out_tok, created_at=now,
+    )
+    db.add(user_msg)
+    db.add(assistant_msg)
+    db.commit()
+    db.refresh(user_msg)
+    db.refresh(assistant_msg)
+
+    return {
+        "user": {"id": user_msg.id, "role": "user", "content": user_text, "created_at": now.isoformat()},
+        "assistant": {"id": assistant_msg.id, "role": "assistant", "content": reply, "created_at": now.isoformat()},
+        "input_tokens": in_tok,
+        "output_tokens": out_tok,
+    }
+
+
+# ─── 確定 / エスカレーション ───
+
+class ResolveBody(BaseModel):
+    action: str  # 'accept' | 'escalate'
+
+
+@router.post("/api/gradings/{grading_id}/resolve")
+def resolve_grading(grading_id: int, body: ResolveBody, db: Session = Depends(get_db)):
+    g = db.query(Grading).get(grading_id)
+    if not g:
+        raise HTTPException(404, "採点結果が見つかりません")
+    batch = db.query(GradingBatch).get(g.batch_id)
+    if not batch:
+        raise HTTPException(500, "バッチが見つかりません")
+
+    if body.action == "accept":
+        earned, newly = _confirm_grading(db, g, batch, final_correct=g.ai_correct)
+        db.commit()
+        backup_to_dropbox()
+        return {"id": g.id, "status": g.status, "points_earned": earned, "newly_cleared": newly}
+    elif body.action == "escalate":
+        g.status = "awaiting_parent"
+        g.feedback = "question"
+        db.commit()
+        # Phase 4 でメール通知実装予定
+        return {"id": g.id, "status": g.status, "points_earned": 0, "newly_cleared": False}
+    else:
+        raise HTTPException(400, "action は accept か escalate")
 
 
 @router.get("/api/gradings/batch/{batch_id}")

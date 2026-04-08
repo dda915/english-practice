@@ -94,6 +94,18 @@ class Grading(Base):
     created_at = Column(DateTime, nullable=False)
 
 
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True)
+    grading_id = Column(Integer, ForeignKey("gradings.id"), nullable=False, index=True)
+    role = Column(Text, nullable=False)  # 'user' | 'assistant'
+    content = Column(Text, nullable=False)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False)
+
+
 class SessionPhoto(Base):
     __tablename__ = "session_photos"
 
