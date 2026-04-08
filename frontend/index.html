@@ -154,6 +154,22 @@
   .swipe-arrow { flex: 1; padding: 12px; font-size: 20px; border: 1px solid #ddd; background: white; border-radius: 8px; cursor: pointer; }
   .swipe-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
 
+  /* ─── 採点結果カード ─── */
+  .result-card { padding: 8px 4px; }
+  .result-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .result-qnum { font-size: 13px; color: var(--text-sub); font-weight: 500; }
+  .result-mark { font-size: 32px; font-weight: 700; line-height: 1; }
+  .result-mark.ok { color: #2e7d32; }
+  .result-mark.ng { color: #c62828; }
+  .result-jp { font-size: 17px; font-weight: 600; line-height: 1.6; padding: 12px; background: #fafafa; border-radius: 8px; margin-bottom: 12px; }
+  .result-section { margin-bottom: 10px; }
+  .result-label { font-size: 11px; color: var(--text-sub); font-weight: 600; margin-bottom: 4px; }
+  .result-reading { font-size: 15px; font-family: 'Source Serif 4', serif; font-style: italic; padding: 8px 12px; background: #fffbea; border-left: 3px solid var(--gold); border-radius: 4px; }
+  .result-english { font-size: 15px; font-family: 'Source Serif 4', serif; font-style: italic; padding: 8px 12px; background: #f0f7ff; border-left: 3px solid #5b8def; border-radius: 4px; }
+  .result-comment { font-size: 14px; line-height: 1.6; padding: 8px 12px; background: #f5f5f5; border-radius: 4px; }
+  .result-fb { display: flex; gap: 8px; margin-top: 16px; }
+  .fb-btn { flex: 1; padding: 14px; font-size: 15px; }
+
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 10px 20px; border-radius: 6px; font-size: 13.5px;
@@ -480,8 +496,49 @@
       </div>
     </div>
 
+    <!-- 子供モード: 採点結果カード -->
+    <template x-if="gradings.length > 0 && !parentMode">
+      <div class="card no-print swipe-wrap" style="margin-top:8px;">
+        <div class="swipe-progress">
+          結果 <span x-text="resultIndex + 1"></span> / <span x-text="gradings.length"></span>
+        </div>
+        <template x-for="(g, i) in gradings" :key="'gr'+g.id">
+          <div class="result-card" x-show="resultIndex === i">
+            <div class="result-head">
+              <span class="result-qnum">&#x5358;&#x5143;<span x-text="g.unit_number"></span> / &#x554F;<span x-text="g.number"></span></span>
+              <span class="result-mark" :class="g.ai_correct ? 'ok' : 'ng'" x-text="g.ai_correct ? '○' : '×'"></span>
+            </div>
+            <div class="result-jp" x-text="g.japanese"></div>
+            <div class="result-section">
+              <div class="result-label">あなたの回答</div>
+              <div class="result-reading" x-text="g.ai_reading || '(読み取れませんでした)'"></div>
+            </div>
+            <div class="result-section">
+              <div class="result-label">模範解答</div>
+              <div class="result-english" x-text="g.english"></div>
+            </div>
+            <div class="result-section">
+              <div class="result-label">AIコメント</div>
+              <div class="result-comment" x-text="g.ai_comment"></div>
+            </div>
+            <div class="result-fb">
+              <button class="btn btn-primary fb-btn" @click="submitFeedback('accept')">
+                <span x-text="g.ai_correct ? '✅ 納得' : '😊 納得'"></span>
+              </button>
+              <button class="btn btn-outline fb-btn" @click="submitFeedback('question')">
+                ❓ 質問がある
+              </button>
+            </div>
+            <div style="font-size:11px; color:var(--text-sub); text-align:center; margin-top:8px;">
+              （「質問がある」のAIチャットはPhase 3で実装予定。現在は「お父さんに確認してほしい」扱いになります）
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+
     <!-- 子供モード: スワイプカードUI -->
-    <template x-if="currentBatch.length > 0 && !parentMode">
+    <template x-if="currentBatch.length > 0 && gradings.length === 0 && !parentMode">
       <div class="card no-print swipe-wrap" style="margin-top:8px;"
            @touchstart.passive="onTouchStart($event)" @touchend.passive="onTouchEnd($event)">
         <div class="swipe-progress">
@@ -521,9 +578,10 @@
             </label>
           </div>
 
-          <button class="btn btn-primary" style="margin-top:16px;" :disabled="photos.length === 0"
-                  @click="alert('採点機能はPhase 2で実装されます（現在は写真アップロードのみ）')">
-            この写真で採点する
+          <button class="btn btn-primary" style="margin-top:16px;" :disabled="photos.length === 0 || gradingLoading"
+                  @click="gradeSession()">
+            <span x-show="!gradingLoading">この写真で採点する</span>
+            <span x-show="gradingLoading">AIが採点しています…</span>
           </button>
         </div>
 
@@ -842,6 +900,9 @@ function app() {
     photos: [],
     touchStartX: null,
     touchStartY: null,
+    gradings: [],
+    resultIndex: 0,
+    gradingLoading: false,
     batchSize: 10,
     scoring: {},
     hasActiveSession: false,
@@ -957,6 +1018,8 @@ function app() {
       this.currentSessionId = null;
       this.cardIndex = 0;
       this.photos = [];
+      this.gradings = [];
+      this.resultIndex = 0;
       this.scoring = {};
       this.exchangeMoney = null;
       this.exchangePhone = null;
@@ -985,6 +1048,8 @@ function app() {
         this.currentSessionId = res.session_id || null;
         this.cardIndex = 0;
         this.photos = [];
+        this.gradings = [];
+        this.resultIndex = 0;
         if (this.currentSessionId) {
           try { this.photos = await this.api(`/api/sessions/${this.currentSessionId}/photos`); } catch (e) {}
         }
@@ -1046,6 +1111,8 @@ function app() {
       this.currentSessionId = null;
       this.cardIndex = 0;
       this.photos = [];
+      this.gradings = [];
+      this.resultIndex = 0;
       this.scoring = {};
     },
 
@@ -1098,6 +1165,58 @@ function app() {
           alert('写真のアップロードに失敗しました: ' + e.message);
         }
       }
+    },
+
+    async gradeSession() {
+      if (!this.currentSessionId) return;
+      if (this.photos.length === 0) { alert('写真を撮影してください'); return; }
+      this.gradingLoading = true;
+      try {
+        const res = await this.api(`/api/sessions/${this.currentSessionId}/grade`, { method: 'POST' });
+        this.gradings = res.gradings || [];
+        this.resultIndex = 0;
+      } catch (e) {
+        alert('採点に失敗しました: ' + e.message);
+      } finally {
+        this.gradingLoading = false;
+      }
+    },
+
+    async submitFeedback(feedback) {
+      const g = this.gradings[this.resultIndex];
+      if (!g) return;
+      try {
+        const res = await this.api(`/api/gradings/${g.id}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ feedback }),
+        });
+        g.status = res.status;
+        g.feedback = feedback;
+        if (feedback === 'accept' && res.points_earned > 0) {
+          this.toasts.push({ id: Date.now(), text: `+${res.points_earned}pt` });
+          setTimeout(() => this.toasts.shift(), 2500);
+        }
+        if (this.resultIndex < this.gradings.length - 1) {
+          this.resultIndex++;
+        } else {
+          await this.finishGrading();
+        }
+      } catch (e) {
+        alert('送信失敗: ' + e.message);
+      }
+    },
+
+    async finishGrading() {
+      // Phase 2 暫定: 全問フィードバック完了で結果表示を閉じてトップへ
+      await this.loadChildData();
+      await this.checkSession();
+      this.gradings = [];
+      this.resultIndex = 0;
+      this.currentBatch = [];
+      this.currentSessionId = null;
+      this.photos = [];
+      this.cardIndex = 0;
+      alert('今回の採点が完了しました！');
     },
 
     async deletePhoto(photo) {

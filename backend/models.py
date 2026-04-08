@@ -67,6 +67,33 @@ class ActiveSession(Base):
     child = relationship("Child")
 
 
+class GradingBatch(Base):
+    __tablename__ = "grading_batches"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("active_sessions.id"), nullable=True, index=True)
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False)
+    model = Column(Text, nullable=False)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+
+
+class Grading(Base):
+    __tablename__ = "gradings"
+
+    id = Column(Integer, primary_key=True)
+    batch_id = Column(Integer, ForeignKey("grading_batches.id"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
+    ai_reading = Column(Text, nullable=False, default="")
+    ai_correct = Column(Boolean, nullable=False, default=False)
+    ai_comment = Column(Text, nullable=False, default="")
+    feedback = Column(Text, nullable=True)  # 'accept' | 'question' | None
+    status = Column(Text, nullable=False, default="pending")  # pending | confirmed | awaiting_parent | parent_confirmed
+    final_correct = Column(Boolean, nullable=True)
+    created_at = Column(DateTime, nullable=False)
+
+
 class SessionPhoto(Base):
     __tablename__ = "session_photos"
 
