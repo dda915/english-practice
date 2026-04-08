@@ -95,7 +95,18 @@
     transition: all 0.15s;
   }
   .child-select:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-light); }
-  @media (max-width: 640px) { .hide-mobile { display: none !important; } }
+  @media (max-width: 640px) {
+    .hide-mobile { display: none !important; }
+    .nav { padding: 0 8px; }
+    .nav-inner { gap: 8px; height: 52px; }
+    .nav-title { display: none; }
+    .nav-tabs { flex: 1; gap: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab { padding: 0 14px; font-size: 14px; min-height: 44px; flex-shrink: 0; }
+    .child-switcher { margin-left: 0; }
+    .child-select { padding: 6px 24px 6px 10px; font-size: 12px; }
+    .nav-points { padding: 4px 10px; font-size: 12px; }
+  }
   .nav-points {
     display: flex; align-items: center; gap: 6px;
     background: var(--gold-bg); border: 1px solid var(--gold-border);
@@ -210,6 +221,19 @@
   .qdetail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee; margin-bottom: 16px; }
   .qdetail-section { margin-bottom: 20px; }
   .qdetail-label { font-size: 11px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ─── サマリー画面 ─── */
+  .summary-stats { display: flex; gap: 12px; margin-bottom: 16px; }
+  .ss-row { flex: 1; text-align: center; padding: 16px 8px; background: #fafafa; border-radius: 10px; }
+  .ss-num { font-size: 36px; font-weight: 700; line-height: 1; }
+  .ss-label { font-size: 12px; color: var(--text-sub); margin-top: 6px; }
+  .ss-line { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+  .ss-line:last-child { border-bottom: none; }
+  .ss-line.ss-earned { background: var(--gold-bg); border-radius: 6px; border: 1px solid var(--gold-border); color: var(--gold); margin: 6px 0; border-bottom: 1px solid var(--gold-border); }
+  .ss-q-chip { padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 13px; cursor: pointer; }
+  .ss-q-chip.ok { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; }
+  .ss-q-chip.ng { background: #ffebee; border-color: #ef9a9a; color: #b71c1c; }
+  .ss-q-chip.wait { background: #fff3cd; border-color: #ffe082; color: #8a6d00; }
 
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
@@ -431,6 +455,61 @@
       <button class="btn btn-outline" @click="showPwDialog = false">&#x30AD;&#x30E3;&#x30F3;&#x30BB;&#x30EB;</button>
       <button class="btn btn-primary" @click="submitPassword()">OK</button>
     </div>
+  </div>
+</div>
+
+<!-- 採点サマリーモーダル -->
+<div class="pw-overlay" x-show="showSummary" x-cloak style="overflow-y:auto;">
+  <div class="qdetail-modal" style="max-width:480px;">
+    <div style="text-align:center; margin-bottom:20px;">
+      <div style="font-size:13px; color:var(--text-sub); margin-bottom:6px;">採点完了！</div>
+      <div style="font-size:22px; font-weight:700;">今回の結果</div>
+    </div>
+
+    <div class="summary-stats">
+      <div class="ss-row">
+        <div class="ss-num" style="color:#2e7d32;" x-text="summaryStats.correct"></div>
+        <div class="ss-label">○ 正解</div>
+      </div>
+      <div class="ss-row">
+        <div class="ss-num" style="color:#c62828;" x-text="summaryStats.wrong"></div>
+        <div class="ss-label">× 不正解</div>
+      </div>
+    </div>
+
+    <div class="ss-line">
+      <span>✅ 確定</span>
+      <strong x-text="summaryStats.confirmed + ' 問'"></strong>
+    </div>
+    <div class="ss-line" x-show="summaryStats.awaitingCount > 0">
+      <span>⏳ お父さん確認中</span>
+      <strong x-text="summaryStats.awaitingCount + ' 問 (問' + summaryStats.awaitingNumbers + ')'"></strong>
+    </div>
+    <div class="ss-line ss-earned" x-show="summaryEarned > 0">
+      <span>🪙 獲得ポイント</span>
+      <strong x-text="'+' + summaryEarned + ' pt'"></strong>
+    </div>
+    <div class="ss-line">
+      <span>💰 累計ポイント</span>
+      <strong x-text="pointBalance + ' pt'"></strong>
+    </div>
+
+    <div style="margin-top:20px;">
+      <div style="font-size:11px; color:var(--text-sub); margin-bottom:6px;">タップで詳細</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        <template x-for="g in gradings" :key="'sg'+g.id">
+          <button class="ss-q-chip" :class="{
+            'ok': g.status === 'confirmed' && g.ai_correct,
+            'ng': g.status === 'confirmed' && !g.ai_correct,
+            'wait': g.status === 'awaiting_parent'
+          }" @click="openSummaryQuestion(g)">
+            問<span x-text="g.number"></span>
+          </button>
+        </template>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%; margin-top:20px; padding:14px;" @click="closeSummary()">とじる</button>
   </div>
 </div>
 
@@ -1167,6 +1246,8 @@ function app() {
     newMessageBody: '',
     qDetail: null,
     qDetailNewMessage: '',
+    showSummary: false,
+    summaryEarned: 0,
     apiUsage: { rows: [], price_usd_per_mtok: { input: 0, output: 0 }, usd_to_jpy: 0 },
     batchSize: 10,
     scoring: {},
@@ -1555,6 +1636,7 @@ function app() {
       this.gradingLoading = true;
       try {
         const res = await this.api(`/api/sessions/${this.currentSessionId}/grade`, { method: 'POST' });
+        this.summaryEarned = 0;
         this.gradings = (res.gradings || []).map(g => ({
           ...g,
           showChat: false,
@@ -1597,7 +1679,10 @@ function app() {
         });
         g.status = res.status;
         g.feedback = 'accept';
-        if (res.points_earned > 0) this.showToast(`+${res.points_earned}pt クリア！`);
+        if (res.points_earned > 0) {
+          this.summaryEarned += res.points_earned;
+          this.showToast(`+${res.points_earned}pt クリア！`);
+        }
         await this.advanceResult();
       } catch (e) {
         alert('送信失敗: ' + e.message);
@@ -1636,6 +1721,7 @@ function app() {
         });
         g.status = res.status;
         if (action === 'accept' && res.points_earned > 0) {
+          this.summaryEarned += res.points_earned;
           this.showToast(`+${res.points_earned}pt クリア！`);
         }
         if (action === 'escalate') {
@@ -1656,10 +1742,33 @@ function app() {
     },
 
     async finishGrading() {
-      // 全問フィードバック完了 → バックエンドのセッションを削除して今回のバッチを終了
+      // 全問フィードバック完了 → サマリー画面を表示
+      await this.loadChildData();
+      this.showSummary = true;
+    },
+
+    get summaryStats() {
+      const gs = this.gradings || [];
+      const correct = gs.filter(g => g.ai_correct).length;
+      const wrong = gs.length - correct;
+      const confirmed = gs.filter(g => g.status === 'confirmed').length;
+      const awaiting = gs.filter(g => g.status === 'awaiting_parent');
+      return {
+        correct,
+        wrong,
+        total: gs.length,
+        confirmed,
+        awaitingCount: awaiting.length,
+        awaitingNumbers: awaiting.map(g => g.number).join(', '),
+      };
+    },
+
+    async closeSummary() {
+      // セッション終了処理
       try {
         await this.api(`/api/children/${this.currentChildId}/session`, { method: 'DELETE' });
       } catch (e) {}
+      this.showSummary = false;
       this.gradings = [];
       this.resultIndex = 0;
       this.currentBatch = [];
@@ -1667,8 +1776,12 @@ function app() {
       this.photos = [];
       this.cardIndex = 0;
       this.hasActiveSession = false;
+      this.summaryEarned = 0;
       await this.loadChildData();
-      this.showToast('今回の採点が完了しました！');
+    },
+
+    openSummaryQuestion(g) {
+      this.openQuestionDetail(g.question_id);
     },
 
     async deletePhoto(photo) {
