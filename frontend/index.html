@@ -1211,7 +1211,13 @@ function app() {
       this.gradingLoading = true;
       try {
         const res = await this.api(`/api/sessions/${this.currentSessionId}/grade`, { method: 'POST' });
-        this.gradings = res.gradings || [];
+        this.gradings = (res.gradings || []).map(g => ({
+          ...g,
+          showChat: false,
+          chatMessages: [],
+          chatInput: '',
+          chatLoading: false,
+        }));
         this.resultIndex = 0;
       } catch (e) {
         alert('採点に失敗しました: ' + e.message);

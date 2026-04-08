@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
-from ..models import Child, Answer, Question, PointLog, ActiveSession
+from ..models import Child, Answer, Question, PointLog, ActiveSession, SessionPhoto
+from .photos import PHOTO_DIR
 
 router = APIRouter(prefix="/api/children", tags=["children"])
 
@@ -179,6 +180,16 @@ def clear_session(child_id: int, db: Session = Depends(get_db)):
     """セッションを手動でリセット"""
     session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
     if session:
+        # 紐づく写真ファイル・レコードも一緒に削除
+        photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
+        for p in photos:
+            try:
+                fp = PHOTO_DIR / p.filename
+                if fp.exists():
+                    fp.unlink()
+            except Exception:
+                pass
+            db.delete(p)
         db.delete(session)
         db.commit()
     return {"ok": True}
