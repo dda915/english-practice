@@ -95,17 +95,50 @@
     transition: all 0.15s;
   }
   .child-select:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-light); }
+  .mobile-header { display: none; }
+  .tab-icon { display: none; }
   @media (max-width: 640px) {
     .hide-mobile { display: none !important; }
-    .nav { padding: 0 8px; }
-    .nav-inner { gap: 8px; height: 52px; }
+    .show-mobile-only { display: inline !important; }
+    /* 上部: 最小ヘッダー（子供セレクタ + 鍵のみ） */
+    .mobile-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: var(--card);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .mobile-header .child-select { font-size: 14px; padding: 8px 28px 8px 14px; }
+    .mobile-lock-btn {
+      background: none; border: none; font-size: 22px;
+      padding: 8px 12px; cursor: pointer; min-height: 44px; min-width: 44px;
+    }
+    /* 下部: タブバー（大きなタップ領域） */
+    .nav {
+      position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+      padding: 0; border-top: 1px solid var(--border); border-bottom: none;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    .nav-inner { gap: 0; height: 62px; padding: 0; }
     .nav-title { display: none; }
-    .nav-tabs { flex: 1; gap: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-    .nav-tabs::-webkit-scrollbar { display: none; }
-    .nav-tab { padding: 0 14px; font-size: 14px; min-height: 44px; flex-shrink: 0; }
-    .child-switcher { margin-left: 0; }
-    .child-select { padding: 6px 24px 6px 10px; font-size: 12px; }
-    .nav-points { padding: 4px 10px; font-size: 12px; }
+    .nav-tabs {
+      flex: 1; width: 100%; gap: 0;
+      justify-content: space-around;
+      overflow: visible;
+    }
+    .nav-tab {
+      flex: 1; flex-direction: column; gap: 3px;
+      padding: 8px 2px; font-size: 10.5px; min-height: 62px;
+      justify-content: center; text-align: center;
+      border-bottom: none; border-top: 2px solid transparent;
+    }
+    .nav-tab .tab-icon { display: block; font-size: 22px; line-height: 1; }
+    .nav-tab.active {
+      border-top-color: var(--accent); border-bottom-color: transparent;
+      background: var(--accent-light);
+    }
+    .child-switcher { display: none; }
+    .main { padding-bottom: 90px; }
   }
   .nav-points {
     display: flex; align-items: center; gap: 6px;
@@ -600,21 +633,43 @@
   </div>
 </template>
 
+<!-- Mobile-only top header: 子供セレクタ + 鍵 -->
+<div class="mobile-header no-print">
+  <select class="child-select" x-model="currentChildId" @change="switchChild()">
+    <template x-for="c in children" :key="c.id">
+      <option :value="c.id" x-text="c.name"></option>
+    </template>
+  </select>
+  <button class="mobile-lock-btn" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
+    <span x-text="parentMode ? '🔓' : '🔒'"></span>
+  </button>
+</div>
+
 <!-- Nav -->
 <nav class="nav no-print">
   <div class="nav-inner">
     <div class="nav-title">&#x1F4D6; &#x548C;&#x6587;&#x82F1;&#x8A33;</div>
     <div class="nav-tabs">
-      <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'">出題</div>
-      <div class="nav-tab" :class="tab === 'scoring' && 'active'" @click="tab = 'scoring'" x-show="parentMode">採点</div>
-      <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'">履歴</div>
+      <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'">
+        <span class="tab-icon">&#x270F;&#xFE0F;</span>出題
+      </div>
+      <div class="nav-tab" :class="tab === 'scoring' && 'active'" @click="tab = 'scoring'" x-show="parentMode">
+        <span class="tab-icon">&#x1F4DD;</span>採点
+      </div>
+      <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'">
+        <span class="tab-icon">&#x1F4CA;</span>履歴
+      </div>
       <div class="nav-tab" :class="tab === 'messages' && 'active'" @click="openMessages()" style="position:relative;">
-        メッセージ
+        <span class="tab-icon">&#x1F4AC;</span>メッセージ
         <span x-show="unreadMessagesCount > 0" class="tab-badge" x-text="unreadMessagesCount"></span>
       </div>
-      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'">ポイント</div>
-      <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode">管理</div>
-      <div class="nav-tab" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
+      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'">
+        <span class="tab-icon">&#x1FA99;</span>ポイント
+      </div>
+      <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode">
+        <span class="tab-icon">&#x2699;&#xFE0F;</span>管理
+      </div>
+      <div class="nav-tab hide-mobile" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
         <span x-text="parentMode ? '🔓' : '🔒'"></span>
       </div>
     </div>
