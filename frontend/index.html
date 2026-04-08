@@ -1895,12 +1895,22 @@ function app() {
     },
 
     filteredProgress() {
+      let list;
       switch (this.historyFilter) {
-        case 'cleared': return this.progress.filter(q => q.cleared);
-        case 'pending': return this.progress.filter(q => !q.cleared && q.history.length > 0);
-        case 'unanswered': return this.progress.filter(q => q.history.length === 0);
-        default: return this.progress;
+        case 'cleared': list = this.progress.filter(q => q.cleared); break;
+        case 'pending': list = this.progress.filter(q => !q.cleared && q.history.length > 0); break;
+        case 'unanswered': list = this.progress.filter(q => q.history.length === 0); break;
+        default: list = this.progress.slice();
       }
+      // 解答済みは最新解答日の新しい順、未解答は問題番号順で末尾
+      const lastDate = q => q.history.length > 0 ? q.history[q.history.length - 1].date : '';
+      return list.sort((a, b) => {
+        const da = lastDate(a), db = lastDate(b);
+        if (da && db) return db.localeCompare(da);
+        if (da) return -1;
+        if (db) return 1;
+        return (a.unit_number - b.unit_number) || (a.number - b.number);
+      });
     },
 
     async handleCsvUpload(event) {
