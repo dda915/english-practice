@@ -810,11 +810,17 @@
           <div style="font-size:15px; color:var(--text-sub); margin-bottom:16px;">
             ノートに書いた答えを撮影しよう
           </div>
-          <label class="photo-btn">
-            <input type="file" accept="image/*" capture="environment" @change="onPhotoPicked($event)" style="display:none;">
+          <!-- 隠しファイル入力（カメラ直接 & フォールバックの2種類） -->
+          <input type="file" accept="image/*" capture="environment" @change="onPhotoPicked($event)" x-ref="photoCam" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+          <input type="file" accept="image/*" @change="onPhotoPicked($event)" x-ref="photoFile" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+
+          <button type="button" class="photo-btn" @click="openCamera()">
             <span style="font-size:48px;">&#x1F4F7;</span>
             <div style="font-size:13px; margin-top:4px;">タップして撮影</div>
-          </label>
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" @click="$refs.photoFile.click()">
+            カメラが開かないときはこちら
+          </button>
 
           <div class="photo-thumbs" x-show="photos.length > 0">
             <template x-for="p in photos" :key="'ph'+p.id">
@@ -823,10 +829,9 @@
                 <button class="photo-del" @click="deletePhoto(p)" title="削除">&#x00D7;</button>
               </div>
             </template>
-            <label class="photo-thumb photo-add">
-              <input type="file" accept="image/*" capture="environment" @change="onPhotoPicked($event)" style="display:none;">
+            <button type="button" class="photo-thumb photo-add" @click="openCamera()">
               <span>&#x002B;</span>
-            </label>
+            </button>
           </div>
 
           <button class="btn btn-primary" style="margin-top:16px;" :disabled="photos.length === 0 || gradingLoading"
@@ -1727,6 +1732,15 @@ function app() {
       this.touchStartY = null;
       if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
       if (dx < 0) this.swipeNext(); else this.swipePrev();
+    },
+
+    openCamera() {
+      // カメラ優先のinputを起動。失敗したらフォールバックに切替
+      try {
+        this.$refs.photoCam.click();
+      } catch (e) {
+        try { this.$refs.photoFile.click(); } catch (e2) { alert('カメラを起動できません'); }
+      }
     },
 
     async onPhotoPicked(ev) {
