@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Child, Question, Message
+from ..push import notify_parents, notify_child
 
 router = APIRouter(tags=["messages"])
 
@@ -74,6 +75,25 @@ def create_message(child_id: int, body: MessageCreate, db: Session = Depends(get
     db.add(m)
     db.commit()
     db.refresh(m)
+
+    # 通知: 反対側に送る
+    try:
+        preview = text[:60] + ("…" if len(text) > 60 else "")
+        if body.sender == "child":
+            notify_parents({
+                "title": f"{child.name}からメッセージ",
+                "body": preview,
+                "url": "/",
+            })
+        else:
+            notify_child(child_id, {
+                "title": "お父さんからメッセージ",
+                "body": preview,
+                "url": "/",
+            })
+    except Exception as e:
+        print(f"[push message] 失敗: {e}")
+
     return _serialize(m, qobj)
 
 

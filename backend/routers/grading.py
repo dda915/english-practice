@@ -24,6 +24,7 @@ from ..models import (
 )
 from ..backup import backup_to_dropbox
 from ..mail import send_escalation_notification
+from ..push import notify_parents, notify_child
 from .photos import PHOTO_DIR
 
 router = APIRouter(tags=["grading"])
@@ -422,6 +423,17 @@ def resolve_grading(grading_id: int, body: ResolveBody, db: Session = Depends(ge
         except Exception as e:
             print(f"[escalation mail] 送信失敗: {e}")
 
+        try:
+            child = db.query(Child).get(batch.child_id)
+            q = db.query(Question).get(g.question_id)
+            notify_parents({
+                "title": f"【要確認】{child.name if child else '子供'}の採点",
+                "body": f"問{q.number if q else ''}: {(q.japanese[:30] if q else '')}",
+                "url": f"/review/{g.id}",
+            })
+        except Exception as e:
+            print(f"[push escalation] 失敗: {e}")
+
         return {"id": g.id, "status": g.status, "points_earned": 0, "newly_cleared": False}
     else:
         raise HTTPException(400, "action は accept か escalate")
@@ -522,6 +534,18 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
 
     db.commit()
     backup_to_dropbox()
+
+    try:
+        q = db.query(Question).get(g.question_id)
+        mark = "○ 正解" if body.final_correct else "× 不正解"
+        notify_child(batch.child_id, {
+            "title": f"お父さんからの返事: {mark}",
+            "body": (q.japanese if q else "") + (f" (+{earned}pt)" if earned else ""),
+            "url": "/",
+        })
+    except Exception as e:
+        print(f"[push parent_review] 失敗: {e}")
+
     return {"id": g.id, "status": g.status, "points_earned": earned}
 
 

@@ -636,6 +636,14 @@
   <!-- ══ Practice ══ -->
   <div x-show="tab === 'practice'" class="fade-in">
 
+    <!-- 通知許可バナー (未購読時のみ) -->
+    <div x-show="pushSupported && !pushSubscribed" class="notif-banner" style="background:#fff7d6; border-color:#e6c84a; color:#7a5a00;">
+      <div style="flex:1;">
+        <div style="font-size:13px; font-weight:600;">🔔 通知をオンにすると <span x-text="parentMode ? '娘から確認依頼が来たとき' : 'お父さんから返事が来たとき'"></span> すぐにお知らせします</div>
+      </div>
+      <button class="btn btn-primary btn-sm" @click="enablePush()" style="white-space:nowrap;">オンにする</button>
+    </div>
+
     <!-- お父さんからの確認結果 通知バナー -->
     <template x-for="n in aiNotifications" :key="'ntf'+n.id">
       <div class="notif-banner" :class="n.final_correct ? 'ok' : 'ng'">
@@ -1137,6 +1145,19 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">プッシュ通知</div>
+      <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">
+        現在: <strong x-text="pushSubscribed ? 'オン' : 'オフ'"></strong>
+        <span x-show="!pushSupported" style="color:var(--wrong);">（このブラウザは非対応）</span>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" @click="enablePush()" x-show="pushSupported && !pushSubscribed">オンにする</button>
+        <button class="btn btn-outline btn-sm" @click="disablePush()" x-show="pushSubscribed">オフにする</button>
+        <button class="btn btn-outline btn-sm" @click="testPush()" x-show="pushSubscribed">テスト送信</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
         <div style="font-size:13px; font-weight:600; color:var(--text-sub);">API利用状況 (Claude Sonnet 4.5)</div>
         <button class="btn btn-outline btn-sm" @click="loadApiUsage()">更新</button>
@@ -1248,6 +1269,8 @@ function app() {
     qDetailNewMessage: '',
     showSummary: false,
     summaryEarned: 0,
+    pushSubscribed: false,
+    pushSupported: false,
     apiUsage: { rows: [], price_usd_per_mtok: { input: 0, output: 0 }, usd_to_jpy: 0 },
     batchSize: 10,
     scoring: {},
@@ -1294,6 +1317,7 @@ function app() {
         await this.checkSession();
         await this.loadAllSummaries();
       }
+      await this.checkPushStatus();
     },
 
     async api(url, options = {}) {
@@ -1530,6 +1554,102 @@ function app() {
         this.qDetailNewMessage = '';
         // メッセージタブ側にも反映
         this.messages.push(m);
+      } catch (e) {
+        alert('送信失敗: ' + e.message);
+      }
+    },
+
+    // ─── Web Push ───
+    _urlBase64ToUint8Array(b64) {
+      const padding = '='.repeat((4 - b64.length % 4) % 4);
+      const base64 = (b64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(base64);
+      const out = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; ++i) out[i] = raw.charCodeAt(i);
+      return out;
+    },
+
+    async checkPushStatus() {
+      this.pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+      if (!this.pushSupported) return;
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        this.pushSubscribed = !!sub;
+      } catch (e) {
+        this.pushSubscribed = false;
+      }
+    },
+
+    async enablePush() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        alert('このブラウザはWeb Push非対応です');
+        return;
+      }
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          alert('通知の許可が得られませんでした');
+          return;
+        }
+        const { public_key } = await this.api('/api/push/public-key');
+        if (!public_key) {
+          alert('サーバーにVAPID公開鍵が設定されていません');
+          return;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: this._urlBase64ToUint8Array(public_key),
+          });
+        }
+        const json = sub.toJSON();
+        await this.api('/api/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            keys: json.keys,
+            user_type: this.parentMode ? 'parent' : 'child',
+            child_id: this.parentMode ? null : this.currentChildId,
+          }),
+        });
+        this.pushSubscribed = true;
+        this.showToast('通知をオンにしました');
+      } catch (e) {
+        alert('通知の登録に失敗しました: ' + e.message);
+      }
+    },
+
+    async disablePush() {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await this.api('/api/push/unsubscribe', {
+            method: 'POST',
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+          await sub.unsubscribe();
+        }
+        this.pushSubscribed = false;
+        this.showToast('通知をオフにしました');
+      } catch (e) {
+        alert('通知の解除に失敗しました: ' + e.message);
+      }
+    },
+
+    async testPush() {
+      try {
+        await this.api('/api/push/test', {
+          method: 'POST',
+          body: JSON.stringify({
+            user_type: this.parentMode ? 'parent' : 'child',
+            child_id: this.parentMode ? null : this.currentChildId,
+          }),
+        });
+        this.showToast('テスト通知を送信しました');
       } catch (e) {
         alert('送信失敗: ' + e.message);
       }

@@ -96,6 +96,18 @@ class Grading(Base):
     created_at = Column(DateTime, nullable=False)
 
 
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True)
+    endpoint = Column(Text, nullable=False, unique=True, index=True)
+    p256dh = Column(Text, nullable=False)
+    auth = Column(Text, nullable=False)
+    user_type = Column(Text, nullable=False)  # 'parent' | 'child'
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False)
+
+
 class Message(Base):
     __tablename__ = "messages"
 
