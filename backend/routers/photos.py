@@ -53,7 +53,13 @@ async def upload_photo(session_id: int, file: UploadFile = File(...), db: Sessio
         session = db.query(ActiveSession).get(session_id)
         child = db.query(Child).get(session.child_id) if session else None
         if child:
-            send_activity(child.name, "答案写真をアップロード", f"{len(data)//1024}KB")
+            mime_sub = ext.lstrip(".").replace("jpg", "jpeg")
+            send_activity(
+                child.name,
+                "答案写真をアップロード",
+                f"{len(data)//1024}KB",
+                attachments=[(stored, data, mime_sub)],
+            )
     except Exception:
         pass
 

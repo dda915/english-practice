@@ -1,3 +1,5 @@
+import asyncio
+from datetime import datetime, timedelta
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -85,6 +87,52 @@ def serve_icon_512():
 @app.get("/.well-known/assetlinks.json")
 def serve_assetlinks():
     return FileResponse(FRONTEND_DIR / "assetlinks.json", media_type="application/json")
+
+
+# ─── 古い答案写真の自動削除 (7日以上前) ───
+PHOTO_RETENTION_DAYS = 7
+
+
+def _cleanup_old_photos():
+    from .database import SessionLocal, DB_DIR
+    from .models import SessionPhoto
+
+    photo_dir = DB_DIR / "photos"
+    cutoff = datetime.now() - timedelta(days=PHOTO_RETENTION_DAYS)
+    db = SessionLocal()
+    try:
+        old = db.query(SessionPhoto).filter(SessionPhoto.created_at < cutoff).all()
+        n = 0
+        for p in old:
+            try:
+                fp = photo_dir / p.filename
+                if fp.exists():
+                    fp.unlink()
+            except Exception as e:
+                print(f"[cleanup] ファイル削除失敗 {p.filename}: {e}")
+            db.delete(p)
+            n += 1
+        db.commit()
+        if n:
+            print(f"[cleanup] {n}枚の古い写真を削除しました (>{PHOTO_RETENTION_DAYS}日)")
+    except Exception as e:
+        print(f"[cleanup] エラー: {e}")
+    finally:
+        db.close()
+
+
+async def _cleanup_loop():
+    while True:
+        try:
+            _cleanup_old_photos()
+        except Exception as e:
+            print(f"[cleanup loop] {e}")
+        await asyncio.sleep(24 * 60 * 60)  # 24時間
+
+
+@app.on_event("startup")
+async def _start_cleanup():
+    asyncio.create_task(_cleanup_loop())
 
 
 

@@ -2,6 +2,8 @@
 import os
 import smtplib
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
 
 SITE_URL = "https://english-practice-5285.onrender.com"
 
@@ -30,7 +32,7 @@ def send_exchange_notification(child_name: str, type_label: str, converted: int,
 </div>"""
 
     send_notification(
-        subject=f"【英語学習】{child_name}がポイント交換を申請（{type_label} {converted}{unit}）",
+        subject=f"🚨🚨【承認してください】{child_name} → {type_label} {converted}{unit} 🚨🚨",
         body=html,
         html=True,
     )
@@ -91,22 +93,37 @@ def send_escalation_notification(
 </div>"""
 
     send_notification(
-        subject=f"【要確認】{child_name}の採点",
+        subject=f"⚠️⚠️【要確認】{child_name}の採点 ⚠️⚠️",
         body=html,
         html=True,
     )
 
 
-def send_activity(child_name: str, event: str, detail: str = ""):
-    """子供のアクティビティ通知（平文）"""
+def send_activity(child_name: str, event: str, detail: str = "", attachments: list | None = None):
+    """子供のアクティビティ通知（平文）。attachments: [(filename, bytes, mime_subtype)]"""
     body = f"{child_name} が {event}"
     if detail:
         body += f"\n\n{detail}"
     body += f"\n\n{SITE_URL}"
-    send_notification(subject=f"【PaePae】{child_name}: {event}", body=body, html=False)
+
+    # detail の先頭行が「問N: 和文…」形式なら件名に含める
+    subject_extra = ""
+    if detail:
+        first_line = detail.split("\n", 1)[0].strip()
+        if first_line.startswith("問"):
+            if len(first_line) > 60:
+                first_line = first_line[:60] + "…"
+            subject_extra = f" / {first_line}"
+
+    send_notification(
+        subject=f"【PaePae】{child_name}: {event}{subject_extra}",
+        body=body,
+        html=False,
+        attachments=attachments,
+    )
 
 
-def send_notification(subject: str, body: str, html: bool = False):
+def send_notification(subject: str, body: str, html: bool = False, attachments: list | None = None):
     """管理者にメール通知を送信"""
     smtp_user = os.environ.get("SMTP_USER")
     smtp_pass = os.environ.get("SMTP_PASS")
@@ -117,7 +134,19 @@ def send_notification(subject: str, body: str, html: bool = False):
         return
 
     subtype = "html" if html else "plain"
-    msg = MIMEText(body, subtype, "utf-8")
+    if attachments:
+        msg = MIMEMultipart()
+        msg.attach(MIMEText(body, subtype, "utf-8"))
+        for att in attachments:
+            try:
+                filename, data, mime_subtype = att
+                img = MIMEImage(data, _subtype=mime_subtype)
+                img.add_header("Content-Disposition", "attachment", filename=filename)
+                msg.attach(img)
+            except Exception as e:
+                print(f"[mail] 添付失敗: {e}")
+    else:
+        msg = MIMEText(body, subtype, "utf-8")
     msg["Subject"] = subject
     msg["From"] = smtp_user
     msg["To"] = notify_email

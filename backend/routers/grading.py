@@ -29,7 +29,7 @@ from .photos import PHOTO_DIR
 
 router = APIRouter(tags=["grading"])
 
-CLAUDE_MODEL = "claude-sonnet-4-5"
+CLAUDE_MODEL = "claude-opus-4-6"
 
 
 def _guess_media_type(path: Path) -> str:
@@ -391,10 +391,19 @@ def post_chat(grading_id: int, body: ChatBody, db: Session = Depends(get_db)):
         batch = db.query(GradingBatch).get(g.batch_id)
         child = db.query(Child).get(batch.child_id) if batch else None
         if child:
+            all_msgs = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.grading_id == grading_id)
+                .order_by(ChatMessage.id.asc())
+                .all()
+            )
+            convo = "\n\n".join(
+                f"{'娘' if m.role == 'user' else 'AI'}: {m.content}" for m in all_msgs
+            )
             send_activity(
                 child.name,
                 "AIに質問",
-                f"問{q.number}: {q.japanese}\n\n娘: {user_text}\n\nAI: {reply}",
+                f"問{q.number}: {q.japanese}\n模範解答: {q.english}\n娘の回答: {g.ai_reading or ''}\nAI判定: {'○' if g.ai_correct else '×'}\n\n─── 会話全体 ───\n{convo}",
             )
     except Exception:
         pass
@@ -754,9 +763,9 @@ async function submit(correct) {{
 
 # ─── API利用状況 ───
 
-# claude-sonnet-4-5 価格 (USD per 1M tokens)
-PRICE_INPUT_USD_PER_MTOK = 3.0
-PRICE_OUTPUT_USD_PER_MTOK = 15.0
+# claude-opus-4-6 価格 (USD per 1M tokens)
+PRICE_INPUT_USD_PER_MTOK = 15.0
+PRICE_OUTPUT_USD_PER_MTOK = 75.0
 USD_TO_JPY = 155.0
 
 
@@ -816,6 +825,50 @@ def api_usage(db: Session = Depends(get_db)):
         "price_usd_per_mtok": {"input": PRICE_INPUT_USD_PER_MTOK, "output": PRICE_OUTPUT_USD_PER_MTOK},
         "usd_to_jpy": USD_TO_JPY,
         "rows": rows,
+    }
+
+
+@router.get("/api/admin/disk-usage")
+def disk_usage():
+    """Render Persistent Disk (/data) の使用量"""
+    import shutil
+    from ..database import DB_DIR
+
+    target = str(DB_DIR)
+    total, used, free = shutil.disk_usage(target)
+
+    def human(n):
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if n < 1024:
+                return f"{n:.2f}{unit}"
+            n /= 1024
+        return f"{n:.2f}PB"
+
+    # /data 配下の内訳
+    breakdown = {}
+    try:
+        for entry in Path(target).iterdir():
+            size = 0
+            if entry.is_file():
+                size = entry.stat().st_size
+            else:
+                for p in entry.rglob("*"):
+                    if p.is_file():
+                        try:
+                            size += p.stat().st_size
+                        except Exception:
+                            pass
+            breakdown[entry.name] = human(size)
+    except Exception as e:
+        breakdown["error"] = str(e)
+
+    return {
+        "path": target,
+        "total": human(total),
+        "used": human(used),
+        "free": human(free),
+        "used_pct": round(used / total * 100, 1),
+        "breakdown": breakdown,
     }
 
 
