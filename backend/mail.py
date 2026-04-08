@@ -36,6 +36,67 @@ def send_exchange_notification(child_name: str, type_label: str, converted: int,
     )
 
 
+def send_escalation_notification(
+    child_name: str,
+    grading_id: int,
+    japanese: str,
+    english: str,
+    ai_reading: str,
+    ai_correct: bool,
+    ai_comment: str,
+    chat_history: list[dict],
+    photo_urls: list[str],
+):
+    """「お父さんに確認してほしい」発生時のメール通知"""
+    review_url = f"{SITE_URL}/review/{grading_id}"
+    mark = "○ 正解" if ai_correct else "× 不正解"
+    mark_color = "#2d5a27" if ai_correct else "#c62828"
+
+    chat_html = ""
+    if chat_history:
+        chat_html = '<div style="margin:12px 0; padding:12px; background:#fafafa; border-radius:8px; border:1px solid #eee;"><div style="font-size:12px; color:#666; margin-bottom:8px;">AIとのやり取り:</div>'
+        for m in chat_history:
+            who = "娘" if m["role"] == "user" else "AI"
+            bg = "#fff7d6" if m["role"] == "user" else "#ffffff"
+            chat_html += f'<div style="margin:6px 0; padding:8px; background:{bg}; border-radius:6px; font-size:13px;"><strong>{who}:</strong> {m["content"]}</div>'
+        chat_html += "</div>"
+
+    photos_html = ""
+    if photo_urls:
+        photos_html = '<div style="margin:12px 0;"><div style="font-size:12px; color:#666; margin-bottom:6px;">答案写真:</div>'
+        for url in photo_urls:
+            photos_html += f'<a href="{url}" style="display:inline-block; margin:4px;">{url}</a><br>'
+        photos_html += "</div>"
+
+    html = f"""\
+<div style="font-family:sans-serif; max-width:560px; margin:0 auto;">
+  <h2 style="color:#c9932b;">{child_name} の採点を確認してください</h2>
+  <div style="margin:16px 0; padding:16px; background:#fff; border:1px solid #ddd; border-radius:8px;">
+    <div style="font-size:12px; color:#666; margin-bottom:4px;">問題</div>
+    <div style="font-size:15px; font-weight:bold; margin-bottom:12px;">{japanese}</div>
+    <div style="font-size:12px; color:#666; margin-bottom:4px;">模範解答</div>
+    <div style="font-size:14px; font-style:italic; margin-bottom:12px;">{english}</div>
+    <div style="font-size:12px; color:#666; margin-bottom:4px;">娘の回答 (AI読取)</div>
+    <div style="font-size:14px; font-style:italic; margin-bottom:12px; padding:8px; background:#fffbea; border-left:3px solid #c9932b;">{ai_reading or '(読み取れませんでした)'}</div>
+    <div style="font-size:12px; color:#666; margin-bottom:4px;">AI判定</div>
+    <div style="font-size:16px; font-weight:bold; color:{mark_color}; margin-bottom:8px;">{mark}</div>
+    <div style="font-size:12px; color:#666; margin-bottom:4px;">AIコメント</div>
+    <div style="font-size:13px; margin-bottom:8px;">{ai_comment}</div>
+  </div>
+  {chat_html}
+  {photos_html}
+  <div style="margin:24px 0; text-align:center;">
+    <a href="{review_url}" style="display:inline-block; background:#c9932b; color:#fff; padding:14px 28px; border-radius:8px; text-decoration:none; font-weight:bold;">確認画面を開く</a>
+  </div>
+</div>"""
+
+    send_notification(
+        subject=f"【要確認】{child_name}の採点",
+        body=html,
+        html=True,
+    )
+
+
 def send_notification(subject: str, body: str, html: bool = False):
     """管理者にメール通知を送信"""
     smtp_user = os.environ.get("SMTP_USER")

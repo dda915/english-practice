@@ -21,7 +21,25 @@ def _migrate_unit_number():
     except Exception as e:
         print(f"Migration warning: {e}")
 
+def _migrate_grading_cols():
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "gradings" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(gradings)")]
+            if "parent_comment" not in cols:
+                conn.execute("ALTER TABLE gradings ADD COLUMN parent_comment TEXT")
+            if "seen_by_child" not in cols:
+                conn.execute("ALTER TABLE gradings ADD COLUMN seen_by_child INTEGER NOT NULL DEFAULT 0")
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning (gradings): {e}")
+
+
 _migrate_unit_number()
+_migrate_grading_cols()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="和文英訳トレーニング")

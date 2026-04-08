@@ -4,7 +4,8 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,7 @@ from ..models import (
     Setting,
 )
 from ..backup import backup_to_dropbox
+from ..mail import send_escalation_notification
 from .photos import PHOTO_DIR
 
 router = APIRouter(tags=["grading"])
@@ -386,10 +388,293 @@ def resolve_grading(grading_id: int, body: ResolveBody, db: Session = Depends(ge
         g.status = "awaiting_parent"
         g.feedback = "question"
         db.commit()
-        # Phase 4 でメール通知実装予定
+
+        # メール通知
+        try:
+            q = db.query(Question).get(g.question_id)
+            child = db.query(Child).get(batch.child_id)
+            chat_msgs = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.grading_id == g.id)
+                .order_by(ChatMessage.id)
+                .all()
+            )
+            chat_history = [{"role": m.role, "content": m.content} for m in chat_msgs]
+            photos = (
+                db.query(SessionPhoto)
+                .filter(SessionPhoto.session_id == batch.session_id)
+                .order_by(SessionPhoto.id)
+                .all()
+            )
+            base_url = "https://english-practice-5285.onrender.com"
+            photo_urls = [f"{base_url}/api/sessions/{batch.session_id}/photos/{p.id}/file" for p in photos]
+            send_escalation_notification(
+                child_name=child.name if child else "子供",
+                grading_id=g.id,
+                japanese=q.japanese if q else "",
+                english=q.english if q else "",
+                ai_reading=g.ai_reading,
+                ai_correct=g.ai_correct,
+                ai_comment=g.ai_comment,
+                chat_history=chat_history,
+                photo_urls=photo_urls,
+            )
+        except Exception as e:
+            print(f"[escalation mail] 送信失敗: {e}")
+
         return {"id": g.id, "status": g.status, "points_earned": 0, "newly_cleared": False}
     else:
         raise HTTPException(400, "action は accept か escalate")
+
+
+# ─── 保護者レビュー ───
+
+class ParentReviewBody(BaseModel):
+    final_correct: bool
+    comment: str = ""
+
+
+@router.get("/api/gradings/awaiting-parent")
+def list_awaiting(db: Session = Depends(get_db)):
+    """管理画面『要確認』タブ用。awaiting_parent 状態の全gradingを返す。"""
+    rows = (
+        db.query(Grading)
+        .filter(Grading.status == "awaiting_parent")
+        .order_by(Grading.id.desc())
+        .all()
+    )
+    result = []
+    for g in rows:
+        q = db.query(Question).get(g.question_id)
+        batch = db.query(GradingBatch).get(g.batch_id)
+        child = db.query(Child).get(batch.child_id) if batch else None
+        chat_msgs = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.grading_id == g.id)
+            .order_by(ChatMessage.id)
+            .all()
+        )
+        photos = []
+        if batch and batch.session_id:
+            photos = (
+                db.query(SessionPhoto)
+                .filter(SessionPhoto.session_id == batch.session_id)
+                .order_by(SessionPhoto.id)
+                .all()
+            )
+        result.append({
+            "id": g.id,
+            "child_id": batch.child_id if batch else None,
+            "child_name": child.name if child else "",
+            "question_number": q.number if q else None,
+            "japanese": q.japanese if q else "",
+            "english": q.english if q else "",
+            "ai_reading": g.ai_reading,
+            "ai_correct": g.ai_correct,
+            "ai_comment": g.ai_comment,
+            "chat": [{"role": m.role, "content": m.content} for m in chat_msgs],
+            "photos": [
+                {"id": p.id, "url": f"/api/sessions/{batch.session_id}/photos/{p.id}/file"}
+                for p in photos
+            ] if batch and batch.session_id else [],
+            "created_at": g.created_at.isoformat(),
+        })
+    return result
+
+
+@router.post("/api/gradings/{grading_id}/parent-review")
+def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends(get_db)):
+    g = db.query(Grading).get(grading_id)
+    if not g:
+        raise HTTPException(404, "採点結果が見つかりません")
+    batch = db.query(GradingBatch).get(g.batch_id)
+    if not batch:
+        raise HTTPException(500, "バッチが見つかりません")
+
+    # Answer 記録＋ポイント判定（finalの正誤で）
+    was_cleared = _is_cleared(db, batch.child_id, g.question_id)
+    db.add(Answer(
+        child_id=batch.child_id,
+        question_id=g.question_id,
+        answered_date=datetime.now(),
+        correct=body.final_correct,
+    ))
+    db.flush()
+    now_cleared = _is_cleared(db, batch.child_id, g.question_id)
+
+    g.status = "parent_confirmed"
+    g.final_correct = body.final_correct
+    g.parent_comment = body.comment or None
+    g.seen_by_child = False
+
+    earned = 0
+    if not was_cleared and now_cleared:
+        q = db.query(Question).get(g.question_id)
+        ppc_setting = db.query(Setting).get("points_per_clear")
+        points_per_clear = int(ppc_setting.value) if ppc_setting else 1
+        db.add(PointLog(
+            child_id=batch.child_id,
+            logged_date=datetime.now().date(),
+            amount=points_per_clear,
+            description=f"問{q.number} クリア",
+        ))
+        earned = points_per_clear
+
+    db.commit()
+    backup_to_dropbox()
+    return {"id": g.id, "status": g.status, "points_earned": earned}
+
+
+# ─── 子供アプリ内通知 ───
+
+@router.get("/api/children/{child_id}/ai-notifications")
+def get_notifications(child_id: int, db: Session = Depends(get_db)):
+    """親が確定した gradings のうち未読のものを返す"""
+    rows = (
+        db.query(Grading)
+        .join(GradingBatch, Grading.batch_id == GradingBatch.id)
+        .filter(
+            GradingBatch.child_id == child_id,
+            Grading.status == "parent_confirmed",
+            Grading.seen_by_child == False,  # noqa: E712
+        )
+        .order_by(Grading.id.desc())
+        .all()
+    )
+    result = []
+    for g in rows:
+        q = db.query(Question).get(g.question_id)
+        result.append({
+            "id": g.id,
+            "question_number": q.number if q else None,
+            "japanese": q.japanese if q else "",
+            "final_correct": g.final_correct,
+            "parent_comment": g.parent_comment or "",
+        })
+    return result
+
+
+@router.post("/api/gradings/{grading_id}/mark-seen")
+def mark_seen(grading_id: int, db: Session = Depends(get_db)):
+    g = db.query(Grading).get(grading_id)
+    if not g:
+        raise HTTPException(404, "採点結果が見つかりません")
+    g.seen_by_child = True
+    db.commit()
+    return {"ok": True}
+
+
+# ─── 保護者レビューHTML（メールリンクから開く） ───
+
+@router.get("/review/{grading_id}", response_class=HTMLResponse)
+def review_page(grading_id: int, db: Session = Depends(get_db)):
+    g = db.query(Grading).get(grading_id)
+    if not g:
+        return HTMLResponse("<p>採点結果が見つかりません</p>", status_code=404)
+    q = db.query(Question).get(g.question_id)
+    batch = db.query(GradingBatch).get(g.batch_id)
+    child = db.query(Child).get(batch.child_id) if batch else None
+    chat_msgs = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.grading_id == g.id)
+        .order_by(ChatMessage.id)
+        .all()
+    )
+    photos = []
+    if batch and batch.session_id:
+        photos = (
+            db.query(SessionPhoto)
+            .filter(SessionPhoto.session_id == batch.session_id)
+            .order_by(SessionPhoto.id)
+            .all()
+        )
+
+    already_done = g.status == "parent_confirmed"
+    ai_mark = "○" if g.ai_correct else "×"
+    ai_color = "#2e7d32" if g.ai_correct else "#c62828"
+
+    chat_html = ""
+    for m in chat_msgs:
+        who = "娘" if m.role == "user" else "AI"
+        bg = "#fff7d6" if m.role == "user" else "#f5f5f5"
+        chat_html += f'<div style="margin:6px 0; padding:10px; background:{bg}; border-radius:6px;"><strong>{who}:</strong> {m.content}</div>'
+
+    photos_html = ""
+    for p in photos:
+        url = f"/api/sessions/{batch.session_id}/photos/{p.id}/file"
+        photos_html += f'<a href="{url}" target="_blank"><img src="{url}" style="max-width:160px; margin:4px; border-radius:6px; border:1px solid #ddd;"></a>'
+
+    done_banner = ""
+    if already_done:
+        final_mark = "○" if g.final_correct else "×"
+        done_banner = f'<div style="padding:12px; background:#e8f5e9; border-radius:8px; margin:12px 0;"><strong>確定済み:</strong> {final_mark}　コメント: {g.parent_comment or "(なし)"}</div>'
+
+    html = f"""<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>採点確認 - {child.name if child else ''}</title>
+<style>
+body {{ font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 16px; background: #fafafa; color: #333; }}
+h2 {{ color: #c9932b; }}
+.card {{ background: white; padding: 16px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 16px; }}
+.label {{ font-size: 12px; color: #666; margin-bottom: 4px; }}
+.value {{ font-size: 15px; margin-bottom: 12px; }}
+.btn {{ display: inline-block; padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: bold; margin-right: 8px; }}
+.btn-ok {{ background: #2e7d32; color: white; }}
+.btn-ng {{ background: #c62828; color: white; }}
+textarea {{ width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; font-size: 14px; }}
+</style></head><body>
+<h2>{(child.name + ' の') if child else ''}採点確認</h2>
+{done_banner}
+<div class="card">
+  <div class="label">問題 (問{q.number if q else ''})</div>
+  <div class="value"><strong>{q.japanese if q else ''}</strong></div>
+  <div class="label">模範解答</div>
+  <div class="value" style="font-style:italic;">{q.english if q else ''}</div>
+  <div class="label">娘の回答（AI読取）</div>
+  <div class="value" style="font-style:italic; padding:8px; background:#fffbea; border-left:3px solid #c9932b;">{g.ai_reading or '(読み取れませんでした)'}</div>
+  <div class="label">AI判定</div>
+  <div class="value" style="font-size:22px; font-weight:bold; color:{ai_color};">{ai_mark}</div>
+  <div class="label">AIコメント</div>
+  <div class="value">{g.ai_comment}</div>
+</div>
+
+{f'<div class="card"><div class="label">AIとのやり取り</div>{chat_html}</div>' if chat_html else ''}
+{f'<div class="card"><div class="label">答案写真</div>{photos_html}</div>' if photos_html else ''}
+
+<div class="card">
+  <div class="label">コメント（任意・娘に表示されます）</div>
+  <textarea id="comment"></textarea>
+  <div style="margin-top:12px;">
+    <button class="btn btn-ok" onclick="submit(true)">○ 正解として確定</button>
+    <button class="btn btn-ng" onclick="submit(false)">× 不正解として確定</button>
+  </div>
+  <div id="msg" style="margin-top:12px; color:#2e7d32; font-weight:bold;"></div>
+</div>
+
+<script>
+async function submit(correct) {{
+  const comment = document.getElementById('comment').value;
+  const msg = document.getElementById('msg');
+  msg.textContent = '送信中…';
+  msg.style.color = '#666';
+  try {{
+    const res = await fetch('/api/gradings/{grading_id}/parent-review', {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ final_correct: correct, comment: comment }}),
+    }});
+    if (!res.ok) throw new Error((await res.json()).detail || 'Error');
+    const data = await res.json();
+    msg.textContent = '✅ 確定しました' + (data.points_earned > 0 ? ` (+${{data.points_earned}}pt)` : '');
+    msg.style.color = '#2e7d32';
+  }} catch (e) {{
+    msg.textContent = '❌ ' + e.message;
+    msg.style.color = '#c62828';
+  }}
+}}
+</script>
+</body></html>"""
+    return html
 
 
 @router.get("/api/gradings/batch/{batch_id}")

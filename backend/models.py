@@ -91,6 +91,8 @@ class Grading(Base):
     feedback = Column(Text, nullable=True)  # 'accept' | 'question' | None
     status = Column(Text, nullable=False, default="pending")  # pending | confirmed | awaiting_parent | parent_confirmed
     final_correct = Column(Boolean, nullable=True)
+    parent_comment = Column(Text, nullable=True)
+    seen_by_child = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False)
 
 
