@@ -124,7 +124,7 @@ def _call_claude(questions: list[Question], photo_paths: list[Path]):
     except json.JSONDecodeError as e:
         raise HTTPException(500, f"AI応答のJSON解析失敗: {e}")
 
-    return parsed, msg.usage.input_tokens, msg.usage.output_tokens
+    return parsed, msg.usage.input_tokens, msg.usage.output_tokens, getattr(msg, "model", CLAUDE_MODEL)
 
 
 @router.post("/api/sessions/{session_id}/grade")
@@ -153,14 +153,14 @@ def grade_session(session_id: int, db: Session = Depends(get_db)):
     if not photo_paths:
         raise HTTPException(400, "写真ファイルが見つかりません")
 
-    parsed, in_tok, out_tok = _call_claude(questions, photo_paths)
+    parsed, in_tok, out_tok, used_model = _call_claude(questions, photo_paths)
 
     now = datetime.now()
     batch = GradingBatch(
         session_id=session_id,
         child_id=session.child_id,
         created_at=now,
-        model=CLAUDE_MODEL,
+        model=used_model,
         input_tokens=in_tok,
         output_tokens=out_tok,
     )
@@ -200,7 +200,7 @@ def grade_session(session_id: int, db: Session = Depends(get_db)):
             q = next((q for q in questions if q.id == g.question_id), None)
             mark = "○" if g.ai_correct else "×"
             lines.append(f"{mark} 問{q.number if q else '?'}: {q.japanese[:40] if q else ''}\n    回答: {g.ai_reading or '(読めず)'}\n    AI: {g.ai_comment}")
-        detail = f"{correct_cnt}/{len(gradings)}問正解\n\n" + "\n\n".join(lines)
+        detail = f"{correct_cnt}/{len(gradings)}問正解\n\n" + "\n\n".join(lines) + f"\n\n---\n採点モデル: {used_model}"
         if child:
             send_activity(child.name, f"AI採点完了 ({correct_cnt}/{len(gradings)}正解)", detail)
     except Exception:
@@ -208,6 +208,7 @@ def grade_session(session_id: int, db: Session = Depends(get_db)):
 
     return {
         "batch_id": batch.id,
+        "model": used_model,
         "input_tokens": in_tok,
         "output_tokens": out_tok,
         "gradings": [

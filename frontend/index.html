@@ -748,6 +748,9 @@
               <div class="result-label">AIコメント</div>
               <div class="result-comment" x-text="g.ai_comment"></div>
             </div>
+            <div style="font-size:10px; color:var(--text-sub); text-align:right; margin-top:4px;">
+              採点モデル: <span x-text="gradingModel || '不明'"></span>
+            </div>
             <div class="result-fb" x-show="!g.showChat">
               <button class="btn btn-primary fb-btn" @click="submitFeedback('accept')">
                 <span x-text="g.ai_correct ? '✅ 納得' : '😊 納得'"></span>
@@ -1307,6 +1310,7 @@ function app() {
     csvResult: null,
     appVersion: null,
     versionReloading: false,
+    gradingModel: null,
 
     get currentChildName() {
       const c = this.children.find(c => c.id == this.currentChildId);
@@ -1318,6 +1322,10 @@ function app() {
         const v = await this.api('/api/version');
         this.appVersion = v.version;
       } catch (e) {}
+      if (localStorage.getItem('justUpdated') === '1') {
+        localStorage.removeItem('justUpdated');
+        setTimeout(() => this.showToast('✨ アプリを最新版に更新しました'), 300);
+      }
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') this.checkVersion();
       });
@@ -1340,6 +1348,7 @@ function app() {
         const v = await this.api('/api/version');
         if (v.version && v.version !== this.appVersion) {
           this.versionReloading = true;
+          localStorage.setItem('justUpdated', '1');
           this.showToast('新しいバージョンがあります。更新します…');
           setTimeout(() => location.reload(), 1200);
         }
@@ -1794,6 +1803,7 @@ function app() {
       try {
         const res = await this.api(`/api/sessions/${this.currentSessionId}/grade`, { method: 'POST' });
         this.summaryEarned = 0;
+        this.gradingModel = res.model || null;
         this.gradings = (res.gradings || []).map(g => ({
           ...g,
           showChat: false,
