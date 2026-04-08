@@ -96,6 +96,19 @@ class Grading(Base):
     created_at = Column(DateTime, nullable=False)
 
 
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True)
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=True, index=True)
+    sender = Column(Text, nullable=False)  # 'parent' | 'child'
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    read_by_parent = Column(Boolean, nullable=False, default=False)
+    read_by_child = Column(Boolean, nullable=False, default=False)
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 

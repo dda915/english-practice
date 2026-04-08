@@ -6,7 +6,7 @@ import sqlite3
 
 from .database import engine, Base, DATABASE_URL
 from .models import Question, Child, Answer, PointLog, Setting
-from .routers import questions, children, answers, points, settings, photos, grading
+from .routers import questions, children, answers, points, settings, photos, grading, messages
 
 # マイグレーション: unit_numberカラム追加（create_allより前に実行）
 def _migrate_unit_number():
@@ -51,6 +51,7 @@ app.include_router(points.router)
 app.include_router(settings.router)
 app.include_router(photos.router)
 app.include_router(grading.router)
+app.include_router(messages.router)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 

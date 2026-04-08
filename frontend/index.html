@@ -191,6 +191,20 @@
   .notif-close { background: none; border: none; font-size: 18px; cursor: pointer; color: inherit; opacity: 0.6; padding: 0 4px; }
   .notif-close:hover { opacity: 1; }
 
+  /* ─── メッセージ ─── */
+  .tab-badge { display: inline-block; margin-left: 4px; padding: 1px 6px; background: var(--wrong, #c62828); color: white; border-radius: 10px; font-size: 10px; font-weight: bold; vertical-align: top; }
+  .msg-log { display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; padding: 8px 0; margin-bottom: 12px; }
+  .msg-item { display: flex; }
+  .msg-item.parent { justify-content: flex-start; }
+  .msg-item.child { justify-content: flex-end; }
+  .msg-bubble { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; }
+  .msg-item.parent .msg-bubble { background: white; border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
+  .msg-item.child .msg-bubble { background: var(--gold); color: white; border-bottom-right-radius: 4px; }
+  .msg-qlink { font-size: 11px; opacity: 0.8; margin-bottom: 4px; font-weight: 600; }
+  .msg-body { white-space: pre-wrap; word-wrap: break-word; }
+  .msg-meta { font-size: 10px; opacity: 0.6; margin-top: 4px; }
+  .msg-compose { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eee; }
+
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 10px 20px; border-radius: 6px; font-size: 13.5px;
@@ -429,6 +443,10 @@
       <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'">出題</div>
       <div class="nav-tab" :class="tab === 'scoring' && 'active'" @click="tab = 'scoring'" x-show="parentMode">採点</div>
       <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'">履歴</div>
+      <div class="nav-tab" :class="tab === 'messages' && 'active'" @click="openMessages()" style="position:relative;">
+        メッセージ
+        <span x-show="unreadMessagesCount > 0" class="tab-badge" x-text="unreadMessagesCount"></span>
+      </div>
       <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'" x-show="parentMode">ポイント</div>
       <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode">管理</div>
       <div class="nav-tab" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
@@ -874,6 +892,38 @@
   </div>
 
   <!-- ══ Admin ══ -->
+  <!-- ══ Messages ══ -->
+  <div x-show="tab === 'messages'" class="fade-in">
+    <div class="page-header">
+      <h2>メッセージ &#x2014; <span x-text="currentChildName"></span></h2>
+    </div>
+    <div class="card">
+      <div x-show="messages.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:20px;">
+        まだメッセージはありません
+      </div>
+      <div class="msg-log">
+        <template x-for="m in messages" :key="'msg'+m.id">
+          <div class="msg-item" :class="m.sender">
+            <div class="msg-bubble">
+              <div x-show="m.question_number" class="msg-qlink" x-text="'📝 問' + m.question_number + 'について'"></div>
+              <div class="msg-body" x-text="m.body"></div>
+              <div class="msg-meta" x-text="formatDate(m.created_at)"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="msg-compose">
+        <input type="text" class="chat-input" placeholder="メッセージを入力…"
+               x-model="newMessageBody" @keydown.enter="sendMessage()">
+        <button class="btn btn-primary chat-send" @click="sendMessage()" :disabled="!newMessageBody.trim()">送信</button>
+      </div>
+      <div style="font-size:11px; color:var(--text-sub); text-align:center; margin-top:8px;">
+        <span x-show="parentMode">お父さんとして送信</span>
+        <span x-show="!parentMode">娘として送信</span>
+      </div>
+    </div>
+  </div>
+
   <div x-show="tab === 'admin'" class="fade-in">
     <div class="page-header">
       <h2>管理設定</h2>
@@ -988,6 +1038,8 @@ function app() {
     gradingLoading: false,
     awaitingParent: [],
     aiNotifications: [],
+    messages: [],
+    newMessageBody: '',
     batchSize: 10,
     scoring: {},
     hasActiveSession: false,
@@ -1081,6 +1133,7 @@ function app() {
       this.progressPercent = this.questions.length > 0
         ? Math.round(this.clearedCount / this.questions.length * 100) : 0;
       await this.loadAiNotifications();
+      await this.loadMessages();
     },
 
     async loadAllSummaries() {
@@ -1188,6 +1241,52 @@ function app() {
     openAdmin() {
       this.tab = 'admin';
       this.loadAwaitingParent();
+    },
+
+    get unreadMessagesCount() {
+      const side = this.parentMode ? 'read_by_parent' : 'read_by_child';
+      return this.messages.filter(m => !m[side]).length;
+    },
+
+    async loadMessages() {
+      if (!this.currentChildId) return;
+      try {
+        this.messages = await this.api(`/api/children/${this.currentChildId}/messages`);
+      } catch (e) {
+        this.messages = [];
+      }
+    },
+
+    async openMessages() {
+      this.tab = 'messages';
+      await this.loadMessages();
+      // 自分宛の未読を既読化
+      try {
+        await this.api(`/api/children/${this.currentChildId}/messages/read-all`, {
+          method: 'POST',
+          body: JSON.stringify({ by: this.parentMode ? 'parent' : 'child' }),
+        });
+        const side = this.parentMode ? 'read_by_parent' : 'read_by_child';
+        this.messages.forEach(m => { m[side] = true; });
+      } catch (e) {}
+    },
+
+    async sendMessage() {
+      const text = (this.newMessageBody || '').trim();
+      if (!text || !this.currentChildId) return;
+      try {
+        const m = await this.api(`/api/children/${this.currentChildId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            body: text,
+            sender: this.parentMode ? 'parent' : 'child',
+          }),
+        });
+        this.messages.push(m);
+        this.newMessageBody = '';
+      } catch (e) {
+        alert('送信失敗: ' + e.message);
+      }
     },
 
     async loadAwaitingParent() {
