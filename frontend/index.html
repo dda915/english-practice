@@ -612,7 +612,7 @@
         メッセージ
         <span x-show="unreadMessagesCount > 0" class="tab-badge" x-text="unreadMessagesCount"></span>
       </div>
-      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'" x-show="parentMode">ポイント</div>
+      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'">ポイント</div>
       <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode">管理</div>
       <div class="nav-tab" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
         <span x-text="parentMode ? '🔓' : '🔒'"></span>
@@ -1454,7 +1454,7 @@ function app() {
       if (this.parentMode) {
         this.parentMode = false;
         this.adminUnlocked = false;
-        if (this.tab === 'scoring' || this.tab === 'admin' || this.tab === 'points') {
+        if (this.tab === 'scoring' || this.tab === 'admin') {
           this.tab = 'practice';
         }
         return;
