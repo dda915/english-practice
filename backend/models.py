@@ -155,3 +155,13 @@ class ExchangeRequest(Base):
     fulfilled_at = Column(DateTime, nullable=True)
 
     child = relationship("Child")
+
+
+class ParentDevice(Base):
+    __tablename__ = "parent_devices"
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(Text, nullable=False, unique=True, index=True)
+    name = Column(Text, nullable=False)
+    registered_at = Column(DateTime, nullable=False)
+    last_seen_at = Column(DateTime, nullable=True)

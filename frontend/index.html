@@ -491,6 +491,19 @@
   </div>
 </div>
 
+<!-- 端末登録確認ダイアログ -->
+<div class="pw-overlay" x-show="showRegisterDialog" x-cloak>
+  <div class="pw-dialog" @click.outside="showRegisterDialog = false">
+    <h3>この端末を保護者端末として登録しますか？</h3>
+    <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">登録すると次回からパスワードなしで自動的に保護者モードになります。</p>
+    <input type="text" x-model="registerDeviceName" placeholder="端末名（例: 秋元のiPhone）" style="width:100%; padding:10px; margin-bottom:12px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box;">
+    <div class="pw-buttons">
+      <button class="btn btn-outline" @click="showRegisterDialog = false">いいえ</button>
+      <button class="btn btn-primary" @click="confirmRegisterDevice()">はい、登録する</button>
+    </div>
+  </div>
+</div>
+
 <!-- 採点サマリーモーダル -->
 <div class="pw-overlay" x-show="showSummary" x-cloak style="overflow-y:auto;">
   <div class="qdetail-modal" style="max-width:480px;">
@@ -1222,6 +1235,32 @@
 
     <div class="card" style="margin-bottom:24px;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">登録端末（保護者モード）</div>
+        <button class="btn btn-outline btn-sm" @click="loadParentDevices()">更新</button>
+      </div>
+      <div x-show="parentDevices.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+        登録された端末はありません
+      </div>
+      <template x-for="d in parentDevices" :key="'pd'+d.id">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 8px; border-bottom:1px solid var(--border-light);"
+             :style="d.device_id === myDeviceId ? 'background:var(--accent-light); border-radius:8px;' : ''">
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <span x-text="d.name"></span>
+              <span x-show="d.device_id === myDeviceId" style="font-size:10px; background:var(--accent); color:white; padding:2px 8px; border-radius:10px;">この端末</span>
+            </div>
+            <div style="font-size:10px; color:var(--text-sub);">
+              登録: <span x-text="formatDate(d.registered_at)"></span>
+              <span x-show="d.last_seen_at"> / 最終: <span x-text="formatDate(d.last_seen_at)"></span></span>
+            </div>
+          </div>
+          <button class="btn btn-outline btn-sm" @click="unregisterDevice(d)" style="color:var(--wrong); border-color:var(--wrong);">解除</button>
+        </div>
+      </template>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
         <div style="font-size:13px; font-weight:600; color:var(--text-sub);">API利用状況 (Claude Sonnet 4.5)</div>
         <button class="btn btn-outline btn-sm" @click="loadApiUsage()">更新</button>
       </div>
@@ -1366,6 +1405,11 @@ function app() {
     appVersion: null,
     versionReloading: false,
     gradingModel: null,
+    myDeviceId: null,
+    deviceRegistered: false,
+    parentDevices: [],
+    showRegisterDialog: false,
+    registerDeviceName: '',
 
     get currentChildName() {
       const c = this.children.find(c => c.id == this.currentChildId);
@@ -1376,6 +1420,21 @@ function app() {
       try {
         const v = await this.api('/api/version');
         this.appVersion = v.version;
+      } catch (e) {}
+      // デバイスID初期化
+      let did = localStorage.getItem('deviceId');
+      if (!did) {
+        did = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2));
+        localStorage.setItem('deviceId', did);
+      }
+      this.myDeviceId = did;
+      try {
+        const r = await this.api('/api/parent-devices/check', { method: 'POST', body: JSON.stringify({ device_id: did }) });
+        if (r.registered) {
+          this.deviceRegistered = true;
+          this.parentMode = true;
+          this.adminUnlocked = true;
+        }
       } catch (e) {}
       if (localStorage.getItem('justUpdated') === '1') {
         localStorage.removeItem('justUpdated');
@@ -1546,6 +1605,12 @@ function app() {
         }
         return;
       }
+      // 登録済み端末ならパスワード不要
+      if (this.deviceRegistered) {
+        this.parentMode = true;
+        this.adminUnlocked = true;
+        return;
+      }
       this.pwInput = '';
       this.pwError = '';
       this.showPwDialog = true;
@@ -1557,9 +1622,61 @@ function app() {
         this.parentMode = true;
         this.adminUnlocked = true;
         this.showPwDialog = false;
+        this.pwInput = '';
+        // 未登録端末なら登録確認ダイアログを表示
+        if (!this.deviceRegistered) {
+          this.registerDeviceName = this._guessDeviceName();
+          this.showRegisterDialog = true;
+        }
       } else {
         this.pwError = 'パスワードが違います';
         this.pwInput = '';
+      }
+    },
+
+    _guessDeviceName() {
+      const ua = navigator.userAgent || '';
+      if (/iPhone/.test(ua)) return 'iPhone';
+      if (/iPad/.test(ua)) return 'iPad';
+      if (/Android/.test(ua)) return 'Android端末';
+      if (/Mac/.test(ua)) return 'Mac';
+      if (/Windows/.test(ua)) return 'Windows PC';
+      return '端末';
+    },
+
+    async confirmRegisterDevice() {
+      try {
+        await this.api('/api/parent-devices/register', {
+          method: 'POST',
+          body: JSON.stringify({ device_id: this.myDeviceId, name: this.registerDeviceName || '端末' }),
+        });
+        this.deviceRegistered = true;
+        this.showRegisterDialog = false;
+        this.showToast('この端末を保護者端末として登録しました');
+      } catch (e) {
+        alert('登録に失敗しました: ' + e.message);
+      }
+    },
+
+    async loadParentDevices() {
+      try {
+        this.parentDevices = await this.api('/api/parent-devices');
+      } catch (e) {}
+    },
+
+    async unregisterDevice(d) {
+      const isSelf = d.device_id === this.myDeviceId;
+      const msg = isSelf
+        ? 'この端末の登録を解除します。次回からパスワードが必要になります。よろしいですか？'
+        : `「${d.name}」の登録を解除しますか？`;
+      if (!confirm(msg)) return;
+      try {
+        await this.api(`/api/parent-devices/${d.id}`, { method: 'DELETE' });
+        if (isSelf) this.deviceRegistered = false;
+        await this.loadParentDevices();
+        this.showToast('登録を解除しました');
+      } catch (e) {
+        alert('解除に失敗しました: ' + e.message);
       }
     },
 
@@ -1567,6 +1684,7 @@ function app() {
       this.tab = 'admin';
       this.loadAwaitingParent();
       this.loadApiUsage();
+      this.loadParentDevices();
     },
 
     get unreadMessagesCount() {
