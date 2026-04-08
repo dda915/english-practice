@@ -1193,8 +1193,7 @@ function app() {
         g.status = res.status;
         g.feedback = feedback;
         if (feedback === 'accept' && res.points_earned > 0) {
-          this.toasts.push({ id: Date.now(), text: `+${res.points_earned}pt` });
-          setTimeout(() => this.toasts.shift(), 2500);
+          this.showToast(`+${res.points_earned}pt クリア！`);
         }
         if (this.resultIndex < this.gradings.length - 1) {
           this.resultIndex++;
@@ -1207,16 +1206,19 @@ function app() {
     },
 
     async finishGrading() {
-      // Phase 2 暫定: 全問フィードバック完了で結果表示を閉じてトップへ
-      await this.loadChildData();
-      await this.checkSession();
+      // 全問フィードバック完了 → バックエンドのセッションを削除して今回のバッチを終了
+      try {
+        await this.api(`/api/children/${this.currentChildId}/session`, { method: 'DELETE' });
+      } catch (e) {}
       this.gradings = [];
       this.resultIndex = 0;
       this.currentBatch = [];
       this.currentSessionId = null;
       this.photos = [];
       this.cardIndex = 0;
-      alert('今回の採点が完了しました！');
+      this.hasActiveSession = false;
+      await this.loadChildData();
+      this.showToast('今回の採点が完了しました！');
     },
 
     async deletePhoto(photo) {
