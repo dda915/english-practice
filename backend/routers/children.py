@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
 from ..models import Child, Answer, Question, PointLog, ActiveSession, SessionPhoto, Grading, GradingBatch, ChatMessage, Message
+from ..mail import send_activity
 from .photos import PHOTO_DIR
 
 router = APIRouter(prefix="/api/children", tags=["children"])
@@ -144,6 +145,11 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
         db.add(new_session)
         db.commit()
         db.refresh(new_session)
+        try:
+            nums = ", ".join(f"問{q.number}" for q in batch)
+            send_activity(child.name, "出題を開始", f"{len(batch)}問: {nums}")
+        except Exception:
+            pass
         return _session_response(new_session, batch)
 
     return {"session_id": None, "questions": []}

@@ -23,7 +23,7 @@ from ..models import (
     Setting,
 )
 from ..backup import backup_to_dropbox
-from ..mail import send_escalation_notification
+from ..mail import send_escalation_notification, send_activity
 from ..push import notify_parents, notify_child
 from .photos import PHOTO_DIR
 
@@ -178,6 +178,20 @@ def grade_session(session_id: int, db: Session = Depends(get_db)):
     for g in gradings:
         db.refresh(g)
 
+    try:
+        child = db.query(Child).get(session.child_id)
+        correct_cnt = sum(1 for g in gradings if g.ai_correct)
+        lines = []
+        for g in gradings:
+            q = next((q for q in questions if q.id == g.question_id), None)
+            mark = "○" if g.ai_correct else "×"
+            lines.append(f"{mark} 問{q.number if q else '?'}: {q.japanese[:40] if q else ''}\n    回答: {g.ai_reading or '(読めず)'}\n    AI: {g.ai_comment}")
+        detail = f"{correct_cnt}/{len(gradings)}問正解\n\n" + "\n\n".join(lines)
+        if child:
+            send_activity(child.name, f"AI採点完了 ({correct_cnt}/{len(gradings)}正解)", detail)
+    except Exception:
+        pass
+
     return {
         "batch_id": batch.id,
         "input_tokens": in_tok,
@@ -240,9 +254,25 @@ def submit_feedback(grading_id: int, body: FeedbackBody, db: Session = Depends(g
         result["newly_cleared"] = newly
         db.commit()
         backup_to_dropbox()
+        try:
+            child = db.query(Child).get(batch.child_id)
+            q = db.query(Question).get(g.question_id)
+            mark = "○" if g.ai_correct else "×"
+            extra = f" (+{earned}pt クリア!)" if newly else ""
+            if child:
+                send_activity(child.name, f"納得して確定 {mark}{extra}", f"問{q.number if q else '?'}: {q.japanese if q else ''}")
+        except Exception:
+            pass
     else:
         # 質問がある → ステータスは変えず、フロント側でチャット欄を開く
         db.commit()
+        try:
+            child = db.query(Child).get(batch.child_id)
+            q = db.query(Question).get(g.question_id)
+            if child:
+                send_activity(child.name, "『質問がある』をタップ", f"問{q.number if q else '?'}: {q.japanese if q else ''}")
+        except Exception:
+            pass
 
     result["status"] = g.status
     return result
@@ -357,6 +387,18 @@ def post_chat(grading_id: int, body: ChatBody, db: Session = Depends(get_db)):
     db.refresh(user_msg)
     db.refresh(assistant_msg)
 
+    try:
+        batch = db.query(GradingBatch).get(g.batch_id)
+        child = db.query(Child).get(batch.child_id) if batch else None
+        if child:
+            send_activity(
+                child.name,
+                "AIに質問",
+                f"問{q.number}: {q.japanese}\n\n娘: {user_text}\n\nAI: {reply}",
+            )
+    except Exception:
+        pass
+
     return {
         "user": {"id": user_msg.id, "role": "user", "content": user_text, "created_at": now.isoformat()},
         "assistant": {"id": assistant_msg.id, "role": "assistant", "content": reply, "created_at": now.isoformat()},
@@ -384,6 +426,15 @@ def resolve_grading(grading_id: int, body: ResolveBody, db: Session = Depends(ge
         earned, newly = _confirm_grading(db, g, batch, final_correct=g.ai_correct)
         db.commit()
         backup_to_dropbox()
+        try:
+            child = db.query(Child).get(batch.child_id)
+            q = db.query(Question).get(g.question_id)
+            mark = "○" if g.ai_correct else "×"
+            extra = f" (+{earned}pt クリア!)" if newly else ""
+            if child:
+                send_activity(child.name, f"チャット後に納得して確定 {mark}{extra}", f"問{q.number if q else '?'}: {q.japanese if q else ''}")
+        except Exception:
+            pass
         return {"id": g.id, "status": g.status, "points_earned": earned, "newly_cleared": newly}
     elif body.action == "escalate":
         g.status = "awaiting_parent"

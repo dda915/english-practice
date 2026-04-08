@@ -7,7 +7,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db, DB_DIR
-from ..models import ActiveSession, SessionPhoto
+from ..models import ActiveSession, SessionPhoto, Child
+from ..mail import send_activity
 
 router = APIRouter(prefix="/api/sessions", tags=["photos"])
 
@@ -47,6 +48,14 @@ async def upload_photo(session_id: int, file: UploadFile = File(...), db: Sessio
     db.add(photo)
     db.commit()
     db.refresh(photo)
+
+    try:
+        session = db.query(ActiveSession).get(session_id)
+        child = db.query(Child).get(session.child_id) if session else None
+        if child:
+            send_activity(child.name, "答案写真をアップロード", f"{len(data)//1024}KB")
+    except Exception:
+        pass
 
     return {
         "id": photo.id,

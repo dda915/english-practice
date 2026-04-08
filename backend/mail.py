@@ -97,6 +97,15 @@ def send_escalation_notification(
     )
 
 
+def send_activity(child_name: str, event: str, detail: str = ""):
+    """子供のアクティビティ通知（平文）"""
+    body = f"{child_name} が {event}"
+    if detail:
+        body += f"\n\n{detail}"
+    body += f"\n\n{SITE_URL}"
+    send_notification(subject=f"【PaePae】{child_name}: {event}", body=body, html=False)
+
+
 def send_notification(subject: str, body: str, html: bool = False):
     """管理者にメール通知を送信"""
     smtp_user = os.environ.get("SMTP_USER")
