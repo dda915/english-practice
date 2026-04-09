@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
-from ..models import Child, Answer, Question, PointLog, ActiveSession, SessionPhoto, Grading, GradingBatch, ChatMessage, Message
+from ..models import Child, Answer, Question, PointLog, ActiveSession, SessionPhoto, Grading, GradingBatch, ChatMessage, Message, Setting
 from ..mail import send_activity
 from .photos import PHOTO_DIR
 
@@ -58,6 +58,40 @@ def _get_cleared_set(db: Session, child_id: int) -> set[int]:
     return {qid for qid, (c, w) in stats.items() if c > w}
 
 
+def _annotate_history(q_answers, points_per_clear):
+    """各解答に cleared_by_this / points_earned を付与"""
+    history = []
+    c = 0
+    w = 0
+    was_cleared = False
+    for a in q_answers:
+        if a.correct:
+            c += 1
+        else:
+            w += 1
+        is_cleared = c > w
+        newly = is_cleared and not was_cleared
+        history.append({
+            "date": a.answered_date.isoformat(),
+            "correct": a.correct,
+            "cleared_after": is_cleared,
+            "cleared_by_this": newly,
+            "points_earned": points_per_clear if newly else 0,
+            "correct_so_far": c,
+            "wrong_so_far": w,
+        })
+        was_cleared = is_cleared
+    return history
+
+
+def _get_points_per_clear(db: Session) -> int:
+    s = db.query(Setting).get("points_per_clear")
+    try:
+        return int(s.value) if s else 1
+    except Exception:
+        return 1
+
+
 @router.get("/{child_id}/progress")
 def get_progress(child_id: int, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
@@ -66,6 +100,7 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
 
     questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
     answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
+    ppc = _get_points_per_clear(db)
 
     # Group answers by question
     answer_map: dict[int, list] = {}
@@ -81,10 +116,7 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
         cleared = correct_count > wrong_count if total > 0 else False
         accuracy = round(correct_count / total * 100) if total > 0 else None
 
-        history = [
-            {"date": a.answered_date.isoformat(), "correct": a.correct}
-            for a in q_answers
-        ]
+        history = _annotate_history(q_answers, ppc)
 
         result.append({
             "question_id": q.id,
@@ -197,7 +229,7 @@ def get_question_detail(child_id: int, question_id: int, db: Session = Depends(g
         .order_by(Answer.id)
         .all()
     )
-    history = [{"date": a.answered_date.isoformat(), "correct": a.correct} for a in answers]
+    history = _annotate_history(answers, _get_points_per_clear(db))
 
     # この子供のこの問題に対する全 grading（AIコメント＋チャット履歴）
     gradings = (
