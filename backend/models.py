@@ -71,7 +71,7 @@ class GradingBatch(Base):
     __tablename__ = "grading_batches"
 
     id = Column(Integer, primary_key=True)
-    session_id = Column(Integer, ForeignKey("active_sessions.id"), nullable=True, index=True)
+    session_id = Column(Integer, nullable=True, index=True)
     child_id = Column(Integer, ForeignKey("children.id"), nullable=False, index=True)
     created_at = Column(DateTime, nullable=False)
     model = Column(Text, nullable=False)
@@ -137,7 +137,7 @@ class SessionPhoto(Base):
     __tablename__ = "session_photos"
 
     id = Column(Integer, primary_key=True)
-    session_id = Column(Integer, ForeignKey("active_sessions.id"), nullable=False, index=True)
+    session_id = Column(Integer, nullable=False, index=True)
     filename = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False)
 

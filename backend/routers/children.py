@@ -296,16 +296,123 @@ def clear_session(child_id: int, db: Session = Depends(get_db)):
     """セッションを手動でリセット"""
     session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
     if session:
-        # 紐づく写真ファイル・レコードも一緒に削除
-        photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
-        for p in photos:
-            try:
-                fp = PHOTO_DIR / p.filename
-                if fp.exists():
-                    fp.unlink()
-            except Exception:
-                pass
-            db.delete(p)
+        # GradingBatch が紐づいていれば写真は保持（レビューページで必要）
+        has_batch = db.query(GradingBatch).filter(GradingBatch.session_id == session.id).first()
+        if not has_batch:
+            photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
+            for p in photos:
+                try:
+                    fp = PHOTO_DIR / p.filename
+                    if fp.exists():
+                        fp.unlink()
+                except Exception:
+                    pass
+                db.delete(p)
         db.delete(session)
         db.commit()
     return {"ok": True}
+
+
+# ─── 復習出題（間違いの多い問題を再出題） ───
+
+
+@router.get("/{child_id}/review-candidates")
+def review_candidates(child_id: int, db: Session = Depends(get_db)):
+    """間違いの多いクリア済み問題を一覧で返す（保護者が復習対象を選ぶ用）"""
+    child = db.query(Child).get(child_id)
+    if not child:
+        raise HTTPException(404, "子供が見つかりません")
+
+    answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
+    stats: dict[int, list[int]] = {}  # question_id -> [correct, wrong]
+    for a in answers:
+        if a.question_id not in stats:
+            stats[a.question_id] = [0, 0]
+        if a.correct:
+            stats[a.question_id][0] += 1
+        else:
+            stats[a.question_id][1] += 1
+
+    # 不正解が1回以上ある問題を抽出（クリア済み・未クリア問わず）
+    candidates = []
+    for qid, (c, w) in stats.items():
+        if w == 0:
+            continue
+        q = db.query(Question).get(qid)
+        if not q:
+            continue
+        cleared = c > w
+        candidates.append({
+            "question_id": q.id,
+            "number": q.number,
+            "unit_number": q.unit_number,
+            "japanese": q.japanese,
+            "english": q.english,
+            "correct_count": c,
+            "wrong_count": w,
+            "total": c + w,
+            "cleared": cleared,
+            "error_rate": round(w / (c + w) * 100),
+        })
+
+    # 誤答率の高い順にソート
+    candidates.sort(key=lambda x: (-x["error_rate"], -x["wrong_count"], x["number"]))
+    return candidates
+
+
+class ReviewSessionBody(BaseModel):
+    question_ids: list[int]
+
+
+@router.post("/{child_id}/review-session")
+def create_review_session(child_id: int, body: ReviewSessionBody, db: Session = Depends(get_db)):
+    """保護者が選んだ問題IDで復習セッションを作成する"""
+    child = db.query(Child).get(child_id)
+    if not child:
+        raise HTTPException(404, "子供が見つかりません")
+
+    if not body.question_ids:
+        raise HTTPException(400, "問題が選択されていません")
+
+    # 既存セッションがあれば削除
+    existing = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    if existing:
+        has_batch = db.query(GradingBatch).filter(GradingBatch.session_id == existing.id).first()
+        if not has_batch:
+            photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == existing.id).all()
+            for p in photos:
+                try:
+                    fp = PHOTO_DIR / p.filename
+                    if fp.exists():
+                        fp.unlink()
+                except Exception:
+                    pass
+                db.delete(p)
+        db.delete(existing)
+        db.flush()
+
+    # 問題の存在確認
+    questions = []
+    for qid in body.question_ids:
+        q = db.query(Question).get(qid)
+        if q:
+            questions.append(q)
+
+    if not questions:
+        raise HTTPException(400, "有効な問題がありません")
+
+    new_session = ActiveSession(
+        child_id=child_id,
+        question_ids=json.dumps([q.id for q in questions]),
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    try:
+        nums = ", ".join(f"問{q.number}" for q in questions)
+        send_activity(child.name, "復習セッション開始", f"{len(questions)}問: {nums}")
+    except Exception:
+        pass
+
+    return _session_response(new_session, questions)

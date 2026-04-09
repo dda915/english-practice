@@ -63,6 +63,7 @@ def _build_prompt(questions: list[Question]) -> str:
         "- 模範解答と語順や語彙が多少違っても、意味が完全に合致し文法も正しければ○。",
         "- 空欄・未記入・読み取れない場合は ai_reading を空文字にして×。",
         "- ai_reading は画像から読み取った文字をそのまま書き起こす。日本語が混ざっていたらそのまま日本語も含めて書き起こす（勝手に英語に補完しない）。",
+        "- 【重要：二重線（取り消し線）の認識】娘は間違えた文字や単語の上に二重線（＝＝）を引いて消すことがあります。二重線で消された部分は「書き直し前の無効な文字」であり、採点対象外です。二重線の後に書き直された文字のみを有効な回答として読み取ってください。ai_reading には『~~消された部分~~ → 書き直し後の文字』の形で記録し、最終的な回答（書き直し後）のみで採点すること。",
         "",
         "【文型（SVOC）について】",
         "- 娘は各英文の下または横に文型記号（S/V/O/C/M など）を書き込んでいます。これも必ず読み取って評価してください。",
@@ -621,6 +622,25 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
     except Exception as e:
         print(f"[push parent_review] 失敗: {e}")
 
+    # 親自身へのメール通知（確定記録）
+    try:
+        q = db.query(Question).get(g.question_id)
+        child = db.query(Child).get(batch.child_id)
+        mark = "○" if body.final_correct else "×"
+        extra = f" (+{earned}pt クリア!)" if earned else ""
+        comment_line = f"\nコメント: {body.comment}" if body.comment else ""
+        detail = (
+            f"問{q.number if q else '?'}: {q.japanese if q else ''}\n"
+            f"模範解答: {q.english if q else ''}\n"
+            f"娘の回答: {g.ai_reading or ''}\n"
+            f"AI判定: {'○' if g.ai_correct else '×'} / AIコメント: {g.ai_comment}\n"
+            f"確定: {mark}{extra}{comment_line}"
+        )
+        if child:
+            send_activity(child.name, f"保護者が採点確定 {mark}{extra}", detail)
+    except Exception as e:
+        print(f"[mail parent_review] 失敗: {e}")
+
     return {"id": g.id, "status": g.status, "points_earned": earned}
 
 
@@ -701,7 +721,7 @@ def review_page(grading_id: int, db: Session = Depends(get_db)):
     photos_html = ""
     for p in photos:
         url = f"/api/sessions/{batch.session_id}/photos/{p.id}/file"
-        photos_html += f'<a href="{url}" target="_blank"><img src="{url}" style="max-width:160px; margin:4px; border-radius:6px; border:1px solid #ddd;"></a>'
+        photos_html += f'<a href="{url}" target="_blank"><img src="{url}" style="max-width:100%; margin:6px 0; border-radius:6px; border:1px solid #ddd;"></a>'
 
     done_banner = ""
     if already_done:
@@ -720,6 +740,7 @@ h2 {{ color: #c9932b; }}
 .btn {{ display: inline-block; padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: bold; margin-right: 8px; }}
 .btn-ok {{ background: #2e7d32; color: white; }}
 .btn-ng {{ background: #c62828; color: white; }}
+.btn-home {{ background: #c9932b; color: white; text-decoration: none; display: inline-block; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: bold; }}
 textarea {{ width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; font-size: 14px; }}
 </style></head><body>
 <h2>{(child.name + ' の') if child else ''}採点確認</h2>
@@ -772,6 +793,9 @@ async function submit(correct) {{
   }}
 }}
 </script>
+<div style="text-align:center; margin:24px 0 32px;">
+  <a href="/" class="btn-home">トップページへ戻る</a>
+</div>
 </body></html>"""
     return html
 
