@@ -52,8 +52,25 @@ DUMMY_QUESTIONS = [
 ]
 
 
+def _ensure_stage_column():
+    """stageカラムがなければ追加"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "children" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+            if "stage" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN stage INTEGER NOT NULL DEFAULT 1")
+                conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration in seed (stage): {e}")
+
+
 def seed():
     _ensure_unit_number_column()
+    _ensure_stage_column()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
