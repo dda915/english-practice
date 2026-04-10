@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Child, Question, Message
 from ..push import notify_parents, notify_child
+from ..mail import send_notification, SITE_URL
 
 router = APIRouter(tags=["messages"])
 
@@ -85,6 +86,26 @@ def create_message(child_id: int, body: MessageCreate, db: Session = Depends(get
                 "body": preview,
                 "url": "/",
             })
+            # メール通知（目立つ件名）
+            try:
+                q_label = f"（問{qobj.number}について）" if qobj else ""
+                html = f"""\
+<div style="font-family:sans-serif; max-width:500px; margin:0 auto;">
+  <h2 style="color:#c9932b;">💬 {child.name}からメッセージが届きました{q_label}</h2>
+  <div style="margin:16px 0; padding:16px; background:#fff7d6; border-radius:8px; border-left:4px solid #c9932b; font-size:15px;">
+    {text}
+  </div>
+  <div style="margin:24px 0; text-align:center;">
+    <a href="{SITE_URL}" style="display:inline-block; background:#c9932b; color:#fff; padding:14px 28px; border-radius:8px; text-decoration:none; font-weight:bold;">アプリを開いて返信する</a>
+  </div>
+</div>"""
+                send_notification(
+                    subject=f"🚨🚨【返信してください】{child.name}からメッセージ{q_label} 🚨🚨",
+                    body=html,
+                    html=True,
+                )
+            except Exception as e:
+                print(f"[mail message] 失敗: {e}")
         else:
             notify_child(child_id, {
                 "title": "お父さんからメッセージ",
