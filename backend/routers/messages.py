@@ -137,6 +137,46 @@ def mark_read(message_id: int, body: MarkReadBody, db: Session = Depends(get_db)
     return {"ok": True}
 
 
+@router.post("/api/messages/{message_id}/seen")
+def mark_seen(message_id: int, db: Session = Depends(get_db)):
+    """子供がメッセージカードを見た時の通知"""
+    m = db.query(Message).get(message_id)
+    if not m:
+        raise HTTPException(404, "メッセージが見つかりません")
+    child = db.query(Child).get(m.child_id)
+    child_name = child.name if child else "子供"
+    preview = m.body[:40] + ("…" if len(m.body) > 40 else "")
+    try:
+        send_notification(
+            subject=f"👀 {child_name}がメッセージを確認中「{preview}」",
+            body=f"{child_name}にメッセージカードが表示されました。\n\n元のメッセージ: {m.body}\n\n返信を待っています…\n\n{SITE_URL}",
+            html=False,
+        )
+    except Exception as e:
+        print(f"[mail seen] 失敗: {e}")
+    return {"ok": True}
+
+
+@router.post("/api/messages/{message_id}/skipped")
+def mark_skipped(message_id: int, db: Session = Depends(get_db)):
+    """子供がメッセージをスルーした時の通知"""
+    m = db.query(Message).get(message_id)
+    if not m:
+        raise HTTPException(404, "メッセージが見つかりません")
+    child = db.query(Child).get(m.child_id)
+    child_name = child.name if child else "子供"
+    preview = m.body[:40] + ("…" if len(m.body) > 40 else "")
+    try:
+        send_notification(
+            subject=f"😅 {child_name}がメッセージをスルーしました「{preview}」",
+            body=f"{child_name}がパパのメッセージをスルーしました。\n\n元のメッセージ: {m.body}\n\nあとで返信が来るかもしれません。\n\n{SITE_URL}",
+            html=False,
+        )
+    except Exception as e:
+        print(f"[mail skipped] 失敗: {e}")
+    return {"ok": True}
+
+
 @router.post("/api/children/{child_id}/messages/read-all")
 def mark_all_read(child_id: int, body: MarkReadBody, db: Session = Depends(get_db)):
     msgs = db.query(Message).filter(Message.child_id == child_id).all()
