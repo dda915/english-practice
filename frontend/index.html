@@ -1341,45 +1341,23 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">復習出題（間違いの多い問題）</div>
-        <button class="btn btn-outline btn-sm" @click="loadReviewCandidates()">読み込む</button>
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ステージ設定</div>
+      <div style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">
+        ステージN = 各問題をN回クリアしないと完了にならない（忘却曲線対策）
       </div>
-      <div x-show="reviewCandidates.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
-        「読み込む」を押すと間違いの多い問題を表示します
-      </div>
-      <div x-show="reviewCandidates.length > 0">
-        <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">
-          <span x-text="Object.values(reviewSelected).filter(v => v).length"></span>問選択中
-          <button class="btn btn-outline btn-sm" style="margin-left:8px;" @click="reviewSelected = {}; reviewCandidates.forEach(c => reviewSelected[c.question_id] = true)">全選択</button>
-          <button class="btn btn-outline btn-sm" style="margin-left:4px;" @click="reviewSelected = {}">全解除</button>
+      <template x-for="c in children" :key="'stage'+c.id">
+        <div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-light); font-size:14px;">
+          <strong x-text="c.name" style="min-width:60px;"></strong>
+          <span style="color:var(--text-sub);">ステージ</span>
+          <select :value="c.stage || 1" @change="updateStage(c.id, parseInt($event.target.value))"
+                  style="font-size:14px; padding:4px 8px; border:1px solid var(--border-light); border-radius:6px; min-width:60px;">
+            <template x-for="n in [1,2,3,4,5]" :key="'s'+n">
+              <option :value="n" x-text="n" :selected="n === (c.stage || 1)"></option>
+            </template>
+          </select>
+          <span style="font-size:12px; color:var(--text-sub);" x-text="'（クリア条件: 正解 > 不正解+' + ((c.stage || 1) - 1) + '）'"></span>
         </div>
-        <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border-light); border-radius:6px;">
-          <template x-for="c in reviewCandidates" :key="'rc'+c.question_id">
-            <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border-light); cursor:pointer; font-size:13px;"
-                   :style="c.cleared ? '' : 'background:#fff5f5;'">
-              <input type="checkbox" x-model="reviewSelected[c.question_id]" style="width:16px; height:16px; flex-shrink:0;">
-              <div style="flex:1; min-width:0;">
-                <div style="display:flex; align-items:center; gap:6px;">
-                  <span style="font-weight:600;">問<span x-text="c.number"></span></span>
-                  <span style="font-size:11px; padding:1px 6px; border-radius:8px;"
-                        :style="c.cleared ? 'background:#e8f5e9; color:#2e7d32;' : 'background:#fce4ec; color:#c62828;'"
-                        x-text="c.cleared ? 'クリア済' : '未クリア'"></span>
-                  <span style="font-size:11px; color:var(--wrong); font-weight:600;" x-text="'誤答率' + c.error_rate + '%'"></span>
-                  <span style="font-size:11px; color:var(--text-sub);" x-text="'(' + c.wrong_count + '/' + c.total + '回不正解)'"></span>
-                </div>
-                <div style="font-size:12px; color:var(--text-sub); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" x-text="c.japanese"></div>
-              </div>
-            </label>
-          </template>
-        </div>
-        <div style="margin-top:12px; text-align:center;">
-          <button class="btn btn-primary" @click="createReviewSession()" :disabled="reviewLoading || Object.values(reviewSelected).filter(v => v).length === 0">
-            <span x-show="!reviewLoading" x-text="Object.values(reviewSelected).filter(v => v).length + '問を復習出題する'"></span>
-            <span x-show="reviewLoading">作成中...</span>
-          </button>
-        </div>
-      </div>
+      </template>
     </div>
 
     <div class="card" style="margin-bottom:24px;">
@@ -1465,9 +1443,6 @@ function app() {
     parentDevices: [],
     showRegisterDialog: false,
     registerDeviceName: '',
-    reviewCandidates: [],
-    reviewSelected: {},
-    reviewLoading: false,
 
     get currentChildName() {
       const c = this.children.find(c => c.id == this.currentChildId);
@@ -1931,43 +1906,20 @@ function app() {
       }
     },
 
-    async loadReviewCandidates() {
-      if (!this.currentChildId) return;
+    async updateStage(childId, newStage) {
       try {
-        this.reviewCandidates = await this.api(`/api/children/${this.currentChildId}/review-candidates`);
-        this.reviewSelected = {};
-      } catch (e) {
-        this.reviewCandidates = [];
-      }
-    },
-
-    async createReviewSession() {
-      const ids = Object.entries(this.reviewSelected).filter(([k,v]) => v).map(([k]) => parseInt(k));
-      if (ids.length === 0) return;
-      this.reviewLoading = true;
-      try {
-        const data = await this.api(`/api/children/${this.currentChildId}/review-session`, {
-          method: 'POST',
-          body: JSON.stringify({ question_ids: ids }),
+        const result = await this.api(`/api/children/${childId}/stage`, {
+          method: 'PUT',
+          body: JSON.stringify({ stage: newStage }),
         });
-        this.currentBatch = data.questions;
-        this.currentSessionId = data.session_id;
-        this.cardIndex = 0;
-        this.photos = [];
-        this.gradings = [];
-        this.resultIndex = 0;
-        this.showSummary = false;
-        this.hasActiveSession = true;
-        this.sessionRemaining = data.questions.length;
-        this.sessionTotal = data.questions.length;
-        this.tab = 'practice';
-        this.showToast(`復習セッション: ${ids.length}問を出題しました`);
-        this.reviewCandidates = [];
-        this.reviewSelected = {};
+        const c = this.children.find(c => c.id === childId);
+        if (c) c.stage = result.stage;
+        this.showToast(`${result.name} をステージ${result.stage}に変更しました`);
+        // 進捗を再読み込み（クリア判定が変わるため）
+        await this.loadProgress();
       } catch (e) {
-        this.showToast('復習セッション作成に失敗しました');
+        this.showToast('ステージ変更に失敗しました');
       }
-      this.reviewLoading = false;
     },
 
     async loadApiUsage() {

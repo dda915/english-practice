@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ..database import get_db
+from ..database import get_db, now_jst
 from ..models import (
     ActiveSession,
     Child,
@@ -156,7 +156,7 @@ def grade_session(session_id: int, db: Session = Depends(get_db)):
 
     parsed, in_tok, out_tok, used_model = _call_claude(questions, photo_paths)
 
-    now = datetime.now()
+    now = now_jst()
     batch = GradingBatch(
         session_id=session_id,
         child_id=session.child_id,
@@ -235,7 +235,7 @@ class FeedbackBody(BaseModel):
     feedback: str  # 'accept' | 'question'
 
 
-def _is_cleared(db: Session, child_id: int, question_id: int) -> bool:
+def _is_cleared(db: Session, child_id: int, question_id: int, stage: int = 1) -> bool:
     answers = (
         db.query(Answer)
         .filter(Answer.child_id == child_id, Answer.question_id == question_id)
@@ -245,7 +245,7 @@ def _is_cleared(db: Session, child_id: int, question_id: int) -> bool:
         return False
     correct = sum(1 for a in answers if a.correct)
     wrong = sum(1 for a in answers if not a.correct)
-    return correct > wrong
+    return correct > wrong + (stage - 1)
 
 
 @router.post("/api/gradings/{grading_id}/feedback")
@@ -298,15 +298,17 @@ def _confirm_grading(db: Session, g: Grading, batch: GradingBatch, final_correct
     """採点結果を確定してAnswer記録＋ポイント付与。(earned, newly_cleared)を返す。commit はしない。"""
     if g.status in ("confirmed", "parent_confirmed"):
         return 0, False
-    was_cleared = _is_cleared(db, batch.child_id, g.question_id)
+    child = db.query(Child).get(batch.child_id)
+    stage = child.stage if child and child.stage else 1
+    was_cleared = _is_cleared(db, batch.child_id, g.question_id, stage)
     db.add(Answer(
         child_id=batch.child_id,
         question_id=g.question_id,
-        answered_date=datetime.now(),
+        answered_date=now_jst(),
         correct=final_correct,
     ))
     db.flush()
-    now_cleared = _is_cleared(db, batch.child_id, g.question_id)
+    now_cleared = _is_cleared(db, batch.child_id, g.question_id, stage)
     g.status = "confirmed"
     g.final_correct = final_correct
     if not was_cleared and now_cleared:
@@ -315,7 +317,7 @@ def _confirm_grading(db: Session, g: Grading, batch: GradingBatch, final_correct
         points_per_clear = int(ppc_setting.value) if ppc_setting else 1
         db.add(PointLog(
             child_id=batch.child_id,
-            logged_date=datetime.now().date(),
+            logged_date=now_jst().date(),
             amount=points_per_clear,
             description=f"問{q.number} クリア",
         ))
@@ -391,7 +393,7 @@ def post_chat(grading_id: int, body: ChatBody, db: Session = Depends(get_db)):
     in_tok = msg.usage.input_tokens
     out_tok = msg.usage.output_tokens
 
-    now = datetime.now()
+    now = now_jst()
     user_msg = ChatMessage(grading_id=grading_id, role="user", content=user_text, created_at=now)
     assistant_msg = ChatMessage(
         grading_id=grading_id, role="assistant", content=reply,
@@ -580,15 +582,17 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
         raise HTTPException(500, "バッチが見つかりません")
 
     # Answer 記録＋ポイント判定（finalの正誤で）
-    was_cleared = _is_cleared(db, batch.child_id, g.question_id)
+    child = db.query(Child).get(batch.child_id)
+    stage = child.stage if child and child.stage else 1
+    was_cleared = _is_cleared(db, batch.child_id, g.question_id, stage)
     db.add(Answer(
         child_id=batch.child_id,
         question_id=g.question_id,
-        answered_date=datetime.now(),
+        answered_date=now_jst(),
         correct=body.final_correct,
     ))
     db.flush()
-    now_cleared = _is_cleared(db, batch.child_id, g.question_id)
+    now_cleared = _is_cleared(db, batch.child_id, g.question_id, stage)
 
     g.status = "parent_confirmed"
     g.final_correct = body.final_correct
@@ -602,7 +606,7 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
         points_per_clear = int(ppc_setting.value) if ppc_setting else 1
         db.add(PointLog(
             child_id=batch.child_id,
-            logged_date=datetime.now().date(),
+            logged_date=now_jst().date(),
             amount=points_per_clear,
             description=f"問{q.number} クリア",
         ))

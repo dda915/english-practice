@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ..database import get_db
+from ..database import get_db, now_jst
 from ..models import Child, Question, Message
 from ..push import notify_parents, notify_child
 from ..mail import send_notification, SITE_URL
@@ -69,7 +69,7 @@ def create_message(child_id: int, body: MessageCreate, db: Session = Depends(get
         question_id=body.question_id,
         sender=body.sender,
         body=text,
-        created_at=datetime.now(),
+        created_at=now_jst(),
         read_by_parent=(body.sender == "parent"),
         read_by_child=(body.sender == "child"),
     )

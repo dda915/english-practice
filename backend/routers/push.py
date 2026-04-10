@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ..database import get_db
+from ..database import get_db, now_jst
 from ..models import PushSubscription
 from ..push import get_public_key, notify_parents, notify_child
 
@@ -44,7 +44,7 @@ def subscribe(body: SubscribeBody, db: Session = Depends(get_db)):
             auth=body.keys.auth,
             user_type=body.user_type,
             child_id=body.child_id,
-            created_at=datetime.now(),
+            created_at=now_jst(),
         ))
     db.commit()
     return {"ok": True}

@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 import sqlite3
 
-from .database import engine, Base, DATABASE_URL
+from .database import engine, Base, DATABASE_URL, now_jst
 from .models import Question, Child, Answer, PointLog, Setting
 from .routers import questions, children, answers, points, settings, photos, grading, messages, push, parent_devices
 
@@ -41,8 +41,21 @@ def _migrate_grading_cols():
         print(f"Migration warning (gradings): {e}")
 
 
+def _migrate_child_stage():
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+        if "stage" not in cols:
+            conn.execute("ALTER TABLE children ADD COLUMN stage INTEGER NOT NULL DEFAULT 1")
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning (child stage): {e}")
+
 _migrate_unit_number()
 _migrate_grading_cols()
+_migrate_child_stage()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="和文英訳トレーニング")
@@ -61,7 +74,7 @@ app.include_router(parent_devices.router)
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
-APP_VERSION = os.environ.get("RENDER_GIT_COMMIT") or datetime.now().strftime("%Y%m%d%H%M%S")
+APP_VERSION = os.environ.get("RENDER_GIT_COMMIT") or now_jst().strftime("%Y%m%d%H%M%S")
 
 
 @app.get("/api/version")
@@ -108,7 +121,7 @@ def _cleanup_old_photos():
     from .models import SessionPhoto
 
     photo_dir = DB_DIR / "photos"
-    cutoff = datetime.now() - timedelta(days=PHOTO_RETENTION_DAYS)
+    cutoff = now_jst() - timedelta(days=PHOTO_RETENTION_DAYS)
     db = SessionLocal()
     try:
         old = db.query(SessionPhoto).filter(SessionPhoto.created_at < cutoff).all()

@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from ..database import get_db
+from ..database import get_db, now_jst
 from ..models import ParentDevice
 
 router = APIRouter(prefix="/api/parent-devices", tags=["parent-devices"])
@@ -21,7 +21,7 @@ class CheckBody(BaseModel):
 def check_device(body: CheckBody, db: Session = Depends(get_db)):
     d = db.query(ParentDevice).filter(ParentDevice.device_id == body.device_id).first()
     if d:
-        d.last_seen_at = datetime.now()
+        d.last_seen_at = now_jst()
         db.commit()
         return {"registered": True, "id": d.id, "name": d.name}
     return {"registered": False}
@@ -31,7 +31,7 @@ def check_device(body: CheckBody, db: Session = Depends(get_db)):
 def register_device(body: RegisterBody, db: Session = Depends(get_db)):
     name = (body.name or "").strip() or "無名の端末"
     d = db.query(ParentDevice).filter(ParentDevice.device_id == body.device_id).first()
-    now = datetime.now()
+    now = now_jst()
     if d:
         d.name = name
         d.last_seen_at = now

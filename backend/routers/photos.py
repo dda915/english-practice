@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from ..database import get_db, DB_DIR
+from ..database import get_db, DB_DIR, now_jst
 from ..models import ActiveSession, SessionPhoto, Child
 from ..mail import send_activity
 
@@ -44,7 +44,7 @@ async def upload_photo(session_id: int, file: UploadFile = File(...), db: Sessio
     stored = f"{session_id}_{uuid.uuid4().hex}{ext}"
     (PHOTO_DIR / stored).write_bytes(data)
 
-    photo = SessionPhoto(session_id=session_id, filename=stored, created_at=datetime.now())
+    photo = SessionPhoto(session_id=session_id, filename=stored, created_at=now_jst())
     db.add(photo)
     db.commit()
     db.refresh(photo)

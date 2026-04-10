@@ -18,7 +18,7 @@ class ChildUpdate(BaseModel):
 @router.get("")
 def list_children(db: Session = Depends(get_db)):
     children = db.query(Child).order_by(Child.id).all()
-    return [{"id": c.id, "name": c.name} for c in children]
+    return [{"id": c.id, "name": c.name, "stage": c.stage or 1} for c in children]
 
 
 @router.put("/{child_id}")
@@ -31,7 +31,14 @@ def update_child(child_id: int, body: ChildUpdate, db: Session = Depends(get_db)
     return {"id": child.id, "name": child.name}
 
 
-def _is_cleared(db: Session, child_id: int, question_id: int) -> bool:
+def _get_stage(db: Session, child_id: int) -> int:
+    child = db.query(Child).get(child_id)
+    return child.stage if child and child.stage else 1
+
+
+def _is_cleared(db: Session, child_id: int, question_id: int, stage: int | None = None) -> bool:
+    if stage is None:
+        stage = _get_stage(db, child_id)
     answers = (
         db.query(Answer)
         .filter(Answer.child_id == child_id, Answer.question_id == question_id)
@@ -41,11 +48,13 @@ def _is_cleared(db: Session, child_id: int, question_id: int) -> bool:
         return False
     correct = sum(1 for a in answers if a.correct)
     wrong = sum(1 for a in answers if not a.correct)
-    return correct > wrong
+    return correct > wrong + (stage - 1)
 
 
-def _get_cleared_set(db: Session, child_id: int) -> set[int]:
+def _get_cleared_set(db: Session, child_id: int, stage: int | None = None) -> set[int]:
     """クリア済み問題IDのセットを一括取得"""
+    if stage is None:
+        stage = _get_stage(db, child_id)
     answers = db.query(Answer).filter(Answer.child_id == child_id).all()
     stats: dict[int, list[int]] = {}  # question_id -> [correct, wrong]
     for a in answers:
@@ -55,22 +64,24 @@ def _get_cleared_set(db: Session, child_id: int) -> set[int]:
             stats[a.question_id][0] += 1
         else:
             stats[a.question_id][1] += 1
-    return {qid for qid, (c, w) in stats.items() if c > w}
+    return {qid for qid, (c, w) in stats.items() if c > w + (stage - 1)}
 
 
-def _annotate_history(q_answers, points_per_clear):
+def _annotate_history(q_answers, points_per_clear, stage: int = 1):
     """各解答に cleared_by_this / points_earned を付与"""
     history = []
     c = 0
     w = 0
-    was_cleared = False
+    clear_count = 0  # 何回クリアしたか
+    was_cleared_at_stage = {s: False for s in range(1, stage + 1)}
     for a in q_answers:
         if a.correct:
             c += 1
         else:
             w += 1
-        is_cleared = c > w
-        newly = is_cleared and not was_cleared
+        # 現在のステージでクリアしているか
+        is_cleared = c > w + (stage - 1)
+        newly = is_cleared and not was_cleared_at_stage.get(stage, False)
         history.append({
             "date": a.answered_date.isoformat(),
             "correct": a.correct,
@@ -80,7 +91,8 @@ def _annotate_history(q_answers, points_per_clear):
             "correct_so_far": c,
             "wrong_so_far": w,
         })
-        was_cleared = is_cleared
+        if newly:
+            was_cleared_at_stage[stage] = True
     return history
 
 
@@ -98,6 +110,7 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
+    stage = _get_stage(db, child_id)
     questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
     answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
     ppc = _get_points_per_clear(db)
@@ -113,10 +126,10 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
         correct_count = sum(1 for a in q_answers if a.correct)
         wrong_count = sum(1 for a in q_answers if not a.correct)
         total = len(q_answers)
-        cleared = correct_count > wrong_count if total > 0 else False
+        cleared = correct_count > wrong_count + (stage - 1) if total > 0 else False
         accuracy = round(correct_count / total * 100) if total > 0 else None
 
-        history = _annotate_history(q_answers, ppc)
+        history = _annotate_history(q_answers, ppc, stage)
 
         result.append({
             "question_id": q.id,
@@ -313,106 +326,21 @@ def clear_session(child_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-# ─── 復習出題（間違いの多い問題を再出題） ───
+# ─── ステージ変更 ───
 
 
-@router.get("/{child_id}/review-candidates")
-def review_candidates(child_id: int, db: Session = Depends(get_db)):
-    """間違いの多いクリア済み問題を一覧で返す（保護者が復習対象を選ぶ用）"""
+class StageBody(BaseModel):
+    stage: int
+
+
+@router.put("/{child_id}/stage")
+def update_stage(child_id: int, body: StageBody, db: Session = Depends(get_db)):
+    """子供のステージを変更"""
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
-
-    answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
-    stats: dict[int, list[int]] = {}  # question_id -> [correct, wrong]
-    for a in answers:
-        if a.question_id not in stats:
-            stats[a.question_id] = [0, 0]
-        if a.correct:
-            stats[a.question_id][0] += 1
-        else:
-            stats[a.question_id][1] += 1
-
-    # 不正解が1回以上ある問題を抽出（クリア済み・未クリア問わず）
-    candidates = []
-    for qid, (c, w) in stats.items():
-        if w == 0:
-            continue
-        q = db.query(Question).get(qid)
-        if not q:
-            continue
-        cleared = c > w
-        candidates.append({
-            "question_id": q.id,
-            "number": q.number,
-            "unit_number": q.unit_number,
-            "japanese": q.japanese,
-            "english": q.english,
-            "correct_count": c,
-            "wrong_count": w,
-            "total": c + w,
-            "cleared": cleared,
-            "error_rate": round(w / (c + w) * 100),
-        })
-
-    # 誤答率の高い順にソート
-    candidates.sort(key=lambda x: (-x["error_rate"], -x["wrong_count"], x["number"]))
-    return candidates
-
-
-class ReviewSessionBody(BaseModel):
-    question_ids: list[int]
-
-
-@router.post("/{child_id}/review-session")
-def create_review_session(child_id: int, body: ReviewSessionBody, db: Session = Depends(get_db)):
-    """保護者が選んだ問題IDで復習セッションを作成する"""
-    child = db.query(Child).get(child_id)
-    if not child:
-        raise HTTPException(404, "子供が見つかりません")
-
-    if not body.question_ids:
-        raise HTTPException(400, "問題が選択されていません")
-
-    # 既存セッションがあれば削除
-    existing = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
-    if existing:
-        has_batch = db.query(GradingBatch).filter(GradingBatch.session_id == existing.id).first()
-        if not has_batch:
-            photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == existing.id).all()
-            for p in photos:
-                try:
-                    fp = PHOTO_DIR / p.filename
-                    if fp.exists():
-                        fp.unlink()
-                except Exception:
-                    pass
-                db.delete(p)
-        db.delete(existing)
-        db.flush()
-
-    # 問題の存在確認
-    questions = []
-    for qid in body.question_ids:
-        q = db.query(Question).get(qid)
-        if q:
-            questions.append(q)
-
-    if not questions:
-        raise HTTPException(400, "有効な問題がありません")
-
-    new_session = ActiveSession(
-        child_id=child_id,
-        question_ids=json.dumps([q.id for q in questions]),
-    )
-    db.add(new_session)
+    if body.stage < 1:
+        raise HTTPException(400, "ステージは1以上")
+    child.stage = body.stage
     db.commit()
-    db.refresh(new_session)
-
-    try:
-        nums = ", ".join(f"問{q.number}" for q in questions)
-        send_activity(child.name, "復習セッション開始", f"{len(questions)}問: {nums}")
-    except Exception:
-        pass
-
-    return _session_response(new_session, questions)
+    return {"id": child.id, "name": child.name, "stage": child.stage}

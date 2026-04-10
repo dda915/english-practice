@@ -1,8 +1,16 @@
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from pathlib import Path
 
 import os
+
+JST = timezone(timedelta(hours=9))
+
+
+def now_jst() -> datetime:
+    """現在時刻をJSTで返す"""
+    return datetime.now(JST)
 
 # Render Persistent Disk: /data があればそこに保存、なければローカル
 if os.path.isdir("/data"):

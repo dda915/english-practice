@@ -2,7 +2,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from ..database import get_db
+from ..database import get_db, now_jst
 from ..models import Answer, Question, PointLog, Child, Setting
 from ..backup import backup_to_dropbox
 
@@ -18,7 +18,7 @@ class AnswersSubmit(BaseModel):
     answers: list[AnswerItem]
 
 
-def _is_cleared(db: Session, child_id: int, question_id: int) -> bool:
+def _is_cleared(db: Session, child_id: int, question_id: int, stage: int = 1) -> bool:
     answers = (
         db.query(Answer)
         .filter(Answer.child_id == child_id, Answer.question_id == question_id)
@@ -28,7 +28,7 @@ def _is_cleared(db: Session, child_id: int, question_id: int) -> bool:
         return False
     correct = sum(1 for a in answers if a.correct)
     wrong = sum(1 for a in answers if not a.correct)
-    return correct > wrong
+    return correct > wrong + (stage - 1)
 
 
 @router.post("/{child_id}/answers")
@@ -37,13 +37,14 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
-    now = datetime.now()
+    stage = child.stage or 1
+    now = now_jst()
     today = now.date()
 
     # Check which questions were cleared BEFORE recording
     was_cleared = {}
     for item in body.answers:
-        was_cleared[item.question_id] = _is_cleared(db, child_id, item.question_id)
+        was_cleared[item.question_id] = _is_cleared(db, child_id, item.question_id, stage)
 
     # Record answers
     for item in body.answers:
@@ -62,7 +63,7 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
     # Check newly cleared
     newly_cleared = []
     for item in body.answers:
-        if not was_cleared[item.question_id] and _is_cleared(db, child_id, item.question_id):
+        if not was_cleared[item.question_id] and _is_cleared(db, child_id, item.question_id, stage):
             q = db.query(Question).get(item.question_id)
             newly_cleared.append(q)
 
