@@ -706,20 +706,20 @@
   <div class="nav-inner">
     <div class="nav-title">&#x1F4D6; &#x548C;&#x6587;&#x82F1;&#x8A33;</div>
     <div class="nav-tabs">
-      <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'">
+      <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'; checkPapaMessages()">
         <span class="tab-icon">&#x270F;&#xFE0F;</span>出題
       </div>
       <div class="nav-tab" :class="tab === 'scoring' && 'active'" @click="tab = 'scoring'" x-show="parentMode">
         <span class="tab-icon">&#x1F4DD;</span>採点
       </div>
-      <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'">
+      <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'; checkPapaMessages()">
         <span class="tab-icon">&#x1F4CA;</span>履歴
       </div>
       <div class="nav-tab" :class="tab === 'messages' && 'active'" @click="openMessages()" style="position:relative;">
         <span class="tab-icon">&#x1F4AC;</span>メッセージ
         <span x-show="unreadMessagesCount > 0" class="tab-badge" x-text="unreadMessagesCount"></span>
       </div>
-      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'">
+      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'; checkPapaMessages()">
         <span class="tab-icon">&#x1FA99;</span>ポイント
       </div>
       <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode">
@@ -1510,7 +1510,10 @@ function app() {
         setTimeout(() => this.showToast('✨ アプリを最新版に更新しました'), 300);
       }
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') this.checkVersion();
+        if (document.visibilityState === 'visible') {
+          this.checkVersion();
+          this.checkPapaMessages();
+        }
       });
       await this.loadQuestions();
       await this.loadChildren();
@@ -1632,6 +1635,7 @@ function app() {
     async generateBatch() {
       await this.checkVersion();
       if (this.versionReloading) return;
+      this.checkPapaMessages();
       this.loading = true;
       await this.loadSettings();
       try {
@@ -1776,18 +1780,24 @@ function app() {
       } catch (e) {
         this.messages = [];
       }
-      // 子供モードで未読のパパメッセージがあればカード表示
-      if (!this.parentMode && !this.papaCard) {
-        const unread = this.messages.filter(m => m.sender === 'parent' && !m.read_by_child);
-        if (unread.length > 0) {
-          const msg = unread[unread.length - 1]; // 最新の未読
-          this.papaCard = msg;
-          this.papaCardSkipped = false;
-          // パパに「表示された」ことを通知
-          try {
-            await this.api(`/api/messages/${msg.id}/seen`, { method: 'POST' });
-          } catch (e) {}
-        }
+      this._showPapaCardIfNeeded();
+    },
+
+    async checkPapaMessages() {
+      if (this.parentMode || this.papaCard || !this.currentChildId) return;
+      await this.loadMessages();
+    },
+
+    async _showPapaCardIfNeeded() {
+      if (this.parentMode || this.papaCard) return;
+      const unread = this.messages.filter(m => m.sender === 'parent' && !m.read_by_child);
+      if (unread.length > 0) {
+        const msg = unread[unread.length - 1];
+        this.papaCard = msg;
+        this.papaCardSkipped = false;
+        try {
+          await this.api(`/api/messages/${msg.id}/seen`, { method: 'POST' });
+        } catch (e) {}
       }
     },
 
@@ -2228,6 +2238,7 @@ function app() {
       // 全問フィードバック完了 → サマリー画面を表示
       await this.loadChildData();
       this.showSummary = true;
+      this.checkPapaMessages();
     },
 
     get summaryStats() {
@@ -2329,6 +2340,7 @@ function app() {
       if (!amount || amount <= 0 || amount > this.availablePoints) return;
       await this.checkVersion();
       if (this.versionReloading) return;
+      this.checkPapaMessages();
       this.loading = true;
       try {
         const result = await this.api(`/api/children/${this.currentChildId}/points/spend`, {
