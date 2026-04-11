@@ -13,7 +13,11 @@ def _vapid_claims():
 
 
 def _get_private_key() -> str | None:
-    return os.environ.get("VAPID_PRIVATE_KEY")
+    key = os.environ.get("VAPID_PRIVATE_KEY")
+    if key:
+        # Render環境変数で改行が\\nになる場合の対応
+        key = key.replace("\\n", "\n")
+    return key
 
 
 def get_public_key() -> str:
@@ -63,7 +67,9 @@ def send_to_subscription(sub: PushSubscription, payload: dict) -> bool:
                 pass
         return False
     except Exception as e:
+        import traceback
         print(f"[push] 例外: {e}")
+        traceback.print_exc()
         return False
 
 
