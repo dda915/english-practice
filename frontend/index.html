@@ -1193,7 +1193,7 @@
       <div x-show="messages.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:20px;">
         まだメッセージはありません
       </div>
-      <div class="msg-log">
+      <div class="msg-log" id="msgLog">
         <template x-for="m in messages" :key="'msg'+m.id">
           <div class="msg-item" :class="m.sender">
             <div class="msg-bubble">
@@ -1833,9 +1833,17 @@ function app() {
       await this.loadMessages();
     },
 
+    _scrollMsgLog() {
+      this.$nextTick(() => {
+        const el = document.getElementById('msgLog');
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    },
+
     async openMessages() {
       this.tab = 'messages';
       await this.loadMessages();
+      this._scrollMsgLog();
       // 自分宛の未読を既読化
       try {
         await this.api(`/api/children/${this.currentChildId}/messages/read-all`, {
@@ -1860,6 +1868,7 @@ function app() {
         });
         this.messages.push(m);
         this.newMessageBody = '';
+        this._scrollMsgLog();
       } catch (e) {
         alert('送信失敗: ' + e.message);
       }
