@@ -68,15 +68,28 @@ class TestBody(BaseModel):
     child_id: int | None = None
 
 
+@router.get("/subscriptions")
+def list_subscriptions(db: Session = Depends(get_db)):
+    subs = db.query(PushSubscription).all()
+    return [{"id": s.id, "user_type": s.user_type, "child_id": s.child_id, "endpoint": s.endpoint[:80] + "..."} for s in subs]
+
+
 @router.post("/test")
-def test_push(body: TestBody):
+def test_push(body: TestBody, db: Session = Depends(get_db)):
     payload = {
         "title": "テスト通知",
         "body": "Web Push が正常に動いています 🎉",
         "url": "/",
     }
+    from ..push import send_to_subscription
     if body.user_type == "parent":
-        notify_parents(payload)
+        subs = db.query(PushSubscription).filter(PushSubscription.user_type == "parent").all()
     elif body.user_type == "child" and body.child_id:
-        notify_child(body.child_id, payload)
-    return {"ok": True}
+        subs = db.query(PushSubscription).filter(PushSubscription.user_type == "child", PushSubscription.child_id == body.child_id).all()
+    else:
+        subs = []
+    results = []
+    for s in subs:
+        ok = send_to_subscription(s, payload)
+        results.append({"endpoint": s.endpoint[:60], "success": ok})
+    return {"ok": True, "subscriptions_count": len(subs), "results": results}
