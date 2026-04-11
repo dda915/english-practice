@@ -14,9 +14,18 @@ def _vapid_claims():
 
 def _get_private_key() -> str | None:
     key = os.environ.get("VAPID_PRIVATE_KEY")
-    if key:
-        # Render環境変数で改行が\\nになる場合の対応
-        key = key.replace("\\n", "\n")
+    if not key:
+        return None
+    # Render環境変数で改行が消える場合の対応
+    key = key.replace("\\n", "\n")
+    # PEM形式でない場合（Base64生キー）はそのまま返す
+    if "BEGIN" not in key:
+        return key
+    # PEM形式の場合、改行が正しいか確認
+    if "\n" not in key.strip():
+        # 改行なしの1行PEM → 復元
+        key = key.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+        key = key.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----\n")
     return key
 
 

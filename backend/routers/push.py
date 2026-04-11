@@ -74,6 +74,25 @@ def list_subscriptions(db: Session = Depends(get_db)):
     return [{"id": s.id, "user_type": s.user_type, "child_id": s.child_id, "endpoint": s.endpoint[:80] + "..."} for s in subs]
 
 
+@router.get("/debug")
+def debug_push():
+    """VAPID設定の診断"""
+    import os
+    from ..push import _get_private_key
+    pk = _get_private_key()
+    raw = os.environ.get("VAPID_PRIVATE_KEY", "")
+    return {
+        "public_key_set": bool(os.environ.get("VAPID_PUBLIC_KEY")),
+        "private_key_set": bool(raw),
+        "private_key_length": len(raw),
+        "private_key_has_begin": "BEGIN" in raw,
+        "private_key_has_newlines": "\n" in raw,
+        "private_key_preview": raw[:30] + "..." if raw else "(empty)",
+        "processed_key_preview": (pk[:30] + "...") if pk else "(None)",
+        "subject": os.environ.get("VAPID_SUBJECT", "(not set)"),
+    }
+
+
 @router.post("/test")
 def test_push(body: TestBody, db: Session = Depends(get_db)):
     payload = {
