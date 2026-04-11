@@ -74,6 +74,15 @@ def list_subscriptions(db: Session = Depends(get_db)):
     return [{"id": s.id, "user_type": s.user_type, "child_id": s.child_id, "endpoint": s.endpoint[:80] + "..."} for s in subs]
 
 
+@router.delete("/subscriptions/{sub_id}")
+def delete_subscription(sub_id: int, db: Session = Depends(get_db)):
+    s = db.query(PushSubscription).get(sub_id)
+    if s:
+        db.delete(s)
+        db.commit()
+    return {"ok": True}
+
+
 @router.get("/debug")
 def debug_push():
     """VAPID設定の診断"""
