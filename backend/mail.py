@@ -100,31 +100,23 @@ def send_escalation_notification(
 
 
 def send_activity(child_name: str, event: str, detail: str = "", attachments: list | None = None):
-    """子供のアクティビティ通知（平文）。attachments: [(filename, bytes, mime_subtype)]"""
+    """子供のアクティビティ通知（平文）。Gmailで娘ごとに同一スレッドにまとまる。"""
     body = f"{child_name} が {event}"
     if detail:
         body += f"\n\n{detail}"
     body += f"\n\n{SITE_URL}"
 
-    # detail の先頭行が「問N: 和文…」形式なら件名に含める
-    subject_extra = ""
-    if detail:
-        first_line = detail.split("\n", 1)[0].strip()
-        if first_line.startswith("問"):
-            if len(first_line) > 60:
-                first_line = first_line[:60] + "…"
-            subject_extra = f" / {first_line}"
-
     send_notification(
-        subject=f"【PaePae】{child_name}: {event}{subject_extra}",
+        subject=f"【PaePae】{child_name}の学習ログ",
         body=body,
         html=False,
         attachments=attachments,
+        thread_key=f"activity-{child_name}",
     )
 
 
-def send_notification(subject: str, body: str, html: bool = False, attachments: list | None = None):
-    """管理者にメール通知を送信"""
+def send_notification(subject: str, body: str, html: bool = False, attachments: list | None = None, thread_key: str | None = None):
+    """管理者にメール通知を送信。thread_key を指定するとGmailで同一スレッドにまとまる。"""
     smtp_user = os.environ.get("SMTP_USER")
     smtp_pass = os.environ.get("SMTP_PASS")
     notify_email = os.environ.get("NOTIFY_EMAIL")
@@ -150,6 +142,11 @@ def send_notification(subject: str, body: str, html: bool = False, attachments: 
     msg["Subject"] = subject
     msg["From"] = smtp_user
     msg["To"] = notify_email
+
+    # スレッドをまとめるための References ヘッダ
+    if thread_key:
+        thread_id = f"<paepae-{thread_key}@english-practice-5285.onrender.com>"
+        msg["References"] = thread_id
 
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as server:

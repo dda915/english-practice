@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db, now_jst
 from ..models import Child, Question, Message
 from ..push import notify_parents, notify_child
-from ..mail import send_notification, SITE_URL
+from ..mail import send_notification, send_activity, SITE_URL
 
 router = APIRouter(tags=["messages"])
 
@@ -147,11 +147,7 @@ def mark_seen(message_id: int, db: Session = Depends(get_db)):
     child_name = child.name if child else "子供"
     preview = m.body[:40] + ("…" if len(m.body) > 40 else "")
     try:
-        send_notification(
-            subject=f"👀 {child_name}がメッセージを確認中「{preview}」",
-            body=f"{child_name}にメッセージカードが表示されました。\n\n元のメッセージ: {m.body}\n\n返信を待っています…\n\n{SITE_URL}",
-            html=False,
-        )
+        send_activity(child_name, f"👀 メッセージを確認中", f"元のメッセージ: {m.body}\n\n返信を待っています…")
     except Exception as e:
         print(f"[mail seen] 失敗: {e}")
     return {"ok": True}
@@ -167,11 +163,7 @@ def mark_skipped(message_id: int, db: Session = Depends(get_db)):
     child_name = child.name if child else "子供"
     preview = m.body[:40] + ("…" if len(m.body) > 40 else "")
     try:
-        send_notification(
-            subject=f"😅 {child_name}がメッセージをスルーしました「{preview}」",
-            body=f"{child_name}がパパのメッセージをスルーしました。\n\n元のメッセージ: {m.body}\n\nあとで返信が来るかもしれません。\n\n{SITE_URL}",
-            html=False,
-        )
+        send_activity(child_name, f"😅 メッセージをスルーしました", f"元のメッセージ: {m.body}\n\nあとで返信が来るかもしれません。")
     except Exception as e:
         print(f"[mail skipped] 失敗: {e}")
     return {"ok": True}
