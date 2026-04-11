@@ -176,6 +176,17 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
         if remaining:
             return _session_response(session, remaining)
         # 全部クリア済みならセッション削除して新規作成へ
+        has_batch = db.query(GradingBatch).filter(GradingBatch.session_id == session.id).first()
+        if not has_batch:
+            photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
+            for p in photos:
+                try:
+                    fp = PHOTO_DIR / p.filename
+                    if fp.exists():
+                        fp.unlink()
+                except Exception:
+                    pass
+                db.delete(p)
         db.delete(session)
         db.flush()
 
