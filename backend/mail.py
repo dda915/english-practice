@@ -4,6 +4,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
+from email.utils import make_msgid
 
 SITE_URL = "https://english-practice-5285.onrender.com"
 
@@ -143,10 +144,28 @@ def send_notification(subject: str, body: str, html: bool = False, attachments: 
     msg["From"] = smtp_user
     msg["To"] = notify_email
 
-    # スレッドをまとめるための References ヘッダ
+    # スレッドをまとめる: 同じ thread_key のメールは In-Reply-To/References で連結
     if thread_key:
-        thread_id = f"<paepae-{thread_key}@english-practice-5285.onrender.com>"
-        msg["References"] = thread_id
+        try:
+            from .database import SessionLocal
+            from .models import EmailThread
+            db = SessionLocal()
+            try:
+                et = db.query(EmailThread).filter(EmailThread.thread_key == thread_key).first()
+                if et:
+                    # 既存スレッド → このメールを返信にする
+                    msg["In-Reply-To"] = et.message_id
+                    msg["References"] = et.message_id
+                else:
+                    # 新規スレッド → Message-ID を記録
+                    new_id = make_msgid(domain="english-practice-5285.onrender.com")
+                    msg["Message-ID"] = new_id
+                    db.add(EmailThread(thread_key=thread_key, message_id=new_id))
+                    db.commit()
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"[mail] スレッド処理エラー（送信は続行）: {e}")
 
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as server:

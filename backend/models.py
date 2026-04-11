@@ -158,6 +158,14 @@ class ExchangeRequest(Base):
     child = relationship("Child")
 
 
+class EmailThread(Base):
+    __tablename__ = "email_threads"
+
+    id = Column(Integer, primary_key=True)
+    thread_key = Column(Text, nullable=False, unique=True, index=True)
+    message_id = Column(Text, nullable=False)  # 最初のメールの Message-ID
+
+
 class ParentDevice(Base):
     __tablename__ = "parent_devices"
 
