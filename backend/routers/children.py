@@ -355,3 +355,66 @@ def update_stage(child_id: int, body: StageBody, db: Session = Depends(get_db)):
     child.stage = body.stage
     db.commit()
     return {"id": child.id, "name": child.name, "stage": child.stage}
+
+
+@router.get("/timeline")
+def get_timeline(limit: int = 100, db: Session = Depends(get_db)):
+    """全子供の最近の解答を時系列で返す（ポイント獲得情報付き）"""
+    # 最近の解答を取得
+    recent = (
+        db.query(Answer, Question, Child)
+        .join(Question, Answer.question_id == Question.id)
+        .join(Child, Answer.child_id == Child.id)
+        .order_by(Answer.answered_date.desc())
+        .limit(limit)
+        .all()
+    )
+
+    # クリア判定のため、子供ごとのステージと全解答を取得
+    children = {c.id: c for c in db.query(Child).all()}
+    ppc = _get_points_per_clear(db)
+
+    # 子供×問題ごとの累計を事前計算（クリア判定用）
+    all_answers = (
+        db.query(Answer)
+        .order_by(Answer.answered_date)
+        .all()
+    )
+    # {(child_id, question_id): [(correct, answered_date), ...]}
+    answer_seq: dict[tuple[int, int], list] = {}
+    for a in all_answers:
+        key = (a.child_id, a.question_id)
+        if key not in answer_seq:
+            answer_seq[key] = []
+        answer_seq[key].append((a.correct, a.id))
+
+    # 各解答がクリアを引き起こしたか判定
+    clear_answers: set[int] = set()  # answer.id のセット
+    for (cid, qid), seq in answer_seq.items():
+        stage = children[cid].stage or 1
+        c = w = 0
+        was_cleared = False
+        for correct, aid in seq:
+            if correct:
+                c += 1
+            else:
+                w += 1
+            is_cleared = c > w + (stage - 1)
+            if is_cleared and not was_cleared:
+                clear_answers.add(aid)
+                was_cleared = True
+
+    result = []
+    for answer, question, child in recent:
+        cleared = answer.id in clear_answers
+        result.append({
+            "time": answer.answered_date.isoformat(),
+            "child_name": child.name,
+            "question_number": question.number,
+            "japanese": question.japanese,
+            "correct": answer.correct,
+            "cleared": cleared,
+            "points_earned": ppc if cleared else 0,
+        })
+
+    return result

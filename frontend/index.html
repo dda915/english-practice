@@ -1222,6 +1222,33 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">タイムライン</div>
+        <button class="btn btn-outline btn-sm" @click="loadTimeline()">更新</button>
+      </div>
+      <div x-show="timeline.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+        まだ記録がありません
+      </div>
+      <div style="max-height:400px; overflow-y:auto;">
+        <template x-for="(ev, i) in timeline" :key="'tl'+i">
+          <div style="padding:8px 0; border-bottom:1px solid var(--border-light); font-size:13px; line-height:1.5;">
+            <div>
+              <strong x-text="ev.child_name" style="color:var(--primary);"></strong>が
+              問<span x-text="ev.question_number"></span>
+              <span style="color:var(--text-sub); font-size:12px;">「<span x-text="ev.japanese.length > 25 ? ev.japanese.slice(0,25)+'…' : ev.japanese"></span>」</span>に
+              <span x-show="ev.correct" style="color:var(--correct); font-weight:700;">○ 正解</span>
+              <span x-show="!ev.correct" style="color:var(--wrong); font-weight:700;">× 不正解</span>
+              <template x-if="ev.cleared">
+                <span style="color:var(--gold); font-weight:600;"> → クリア! +<span x-text="ev.points_earned"></span>pt</span>
+              </template>
+            </div>
+            <div style="font-size:11px; color:var(--text-sub);" x-text="formatDateTime(ev.time)"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
       <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">交換リクエスト</div>
       <div x-show="exchangeRequests.filter(r => !r.fulfilled).length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
         未対応のリクエストはありません
@@ -1453,6 +1480,7 @@ function app() {
     showPwDialog: false,
     pwInput: '',
     pwError: '',
+    timeline: [],
     exchangeRequests: [],
     pendingRequests: [],
     exchangeMoney: null,
@@ -1759,6 +1787,7 @@ function app() {
 
     openAdmin() {
       this.tab = 'admin';
+      this.loadTimeline();
       this.loadAwaitingParent();
       this.loadApiUsage();
       this.loadParentDevices();
@@ -2367,6 +2396,10 @@ function app() {
       } finally {
         this.loading = false;
       }
+    },
+
+    async loadTimeline() {
+      this.timeline = await this.api('/api/children/timeline?limit=100');
     },
 
     async fulfillRequest(reqId) {
