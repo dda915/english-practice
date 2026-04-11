@@ -1858,20 +1858,26 @@ function app() {
     async sendMessage() {
       const text = (this.newMessageBody || '').trim();
       if (!text || !this.currentChildId) return;
-      try {
-        const m = await this.api(`/api/children/${this.currentChildId}/messages`, {
-          method: 'POST',
-          body: JSON.stringify({
-            body: text,
-            sender: this.parentMode ? 'parent' : 'child',
-          }),
-        });
-        this.messages.push(m);
-        this.newMessageBody = '';
-        this._scrollMsgLog();
-      } catch (e) {
-        alert('送信失敗: ' + e.message);
-      }
+      const sender = this.parentMode ? 'parent' : 'child';
+      // 即座にUIに反映
+      this.messages.push({
+        id: Date.now(),
+        child_id: this.currentChildId,
+        question_id: null,
+        question_number: null,
+        sender,
+        body: text,
+        created_at: new Date().toISOString(),
+        read_by_parent: sender === 'parent',
+        read_by_child: sender === 'child',
+      });
+      this.newMessageBody = '';
+      this._scrollMsgLog();
+      // バックグラウンドでAPI送信
+      this.api(`/api/children/${this.currentChildId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body: text, sender }),
+      }).catch(() => {});
     },
 
     async openQuestionDetail(questionId) {
