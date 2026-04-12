@@ -68,9 +68,34 @@ def _ensure_stage_column():
         print(f"Migration in seed (stage): {e}")
 
 
+def _ensure_access_code_column():
+    """access_codeカラムがなければ追加"""
+    import secrets
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "children" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+            if "access_code" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN access_code TEXT")
+                conn.commit()
+            # 未設定の子供にコードを発行
+            rows = conn.execute("SELECT id FROM children WHERE access_code IS NULL").fetchall()
+            for (cid,) in rows:
+                code = secrets.token_urlsafe(8)
+                conn.execute("UPDATE children SET access_code = ? WHERE id = ?", (code, cid))
+            if rows:
+                conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration in seed (access_code): {e}")
+
+
 def seed():
     _ensure_unit_number_column()
     _ensure_stage_column()
+    _ensure_access_code_column()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
