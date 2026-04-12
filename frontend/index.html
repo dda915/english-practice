@@ -1320,6 +1320,10 @@
           </div>
         </div>
       </template>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <input type="text" x-model="newChildName" placeholder="新しい子供の名前" style="flex:1; font-size:13px; padding:6px 10px; border:1px solid var(--border-light); border-radius:6px;">
+        <button class="btn btn-primary btn-sm" @click="addChild()">追加</button>
+      </div>
     </div>
 
     <div class="card" style="margin-bottom:24px;">
@@ -1495,6 +1499,7 @@ function app() {
     exchangeRates: { money: 10, phone: 10 },
     pointsPerClear: 1,
     kidLocked: false,
+    newChildName: '',
     parentMode: false,
     adminUnlocked: false,
     showPwDialog: false,
@@ -2431,6 +2436,14 @@ function app() {
       } finally {
         this.loading = false;
       }
+    },
+
+    async addChild() {
+      if (!this.newChildName.trim()) return;
+      const c = await this.api('/api/children', { method: 'POST', body: JSON.stringify({ name: this.newChildName.trim() }) });
+      this.children.push(c);
+      this.newChildName = '';
+      this.showToast(`${c.name} を追加しました`);
     },
 
     async loadTimeline() {

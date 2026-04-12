@@ -29,6 +29,15 @@ def get_child_by_code(code: str, db: Session = Depends(get_db)):
     return {"id": child.id, "name": child.name, "stage": child.stage or 1}
 
 
+@router.post("")
+def add_child(body: ChildUpdate, db: Session = Depends(get_db)):
+    import secrets
+    child = Child(name=body.name, stage=1, access_code=secrets.token_urlsafe(8))
+    db.add(child)
+    db.commit()
+    return {"id": child.id, "name": child.name, "stage": child.stage, "access_code": child.access_code}
+
+
 @router.put("/{child_id}")
 def update_child(child_id: int, body: ChildUpdate, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
