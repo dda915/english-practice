@@ -21,6 +21,7 @@ class Child(Base):
     id = Column(Integer, primary_key=True)
     name = Column(Text, nullable=False)
     stage = Column(Integer, nullable=False, default=1)
+    access_code = Column(Text, nullable=True, unique=True)
 
     answers = relationship("Answer", back_populates="child")
     point_logs = relationship("PointLog", back_populates="child")

@@ -18,7 +18,15 @@ class ChildUpdate(BaseModel):
 @router.get("")
 def list_children(db: Session = Depends(get_db)):
     children = db.query(Child).order_by(Child.id).all()
-    return [{"id": c.id, "name": c.name, "stage": c.stage or 1} for c in children]
+    return [{"id": c.id, "name": c.name, "stage": c.stage or 1, "access_code": c.access_code} for c in children]
+
+
+@router.get("/by-code/{code}")
+def get_child_by_code(code: str, db: Session = Depends(get_db)):
+    child = db.query(Child).filter(Child.access_code == code).first()
+    if not child:
+        raise HTTPException(404, "無効なコードです")
+    return {"id": child.id, "name": child.name, "stage": child.stage or 1}
 
 
 @router.put("/{child_id}")

@@ -53,9 +53,30 @@ def _migrate_child_stage():
     except Exception as e:
         print(f"Migration warning (child stage): {e}")
 
+def _migrate_child_access_code():
+    import secrets
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+        if "access_code" not in cols:
+            conn.execute("ALTER TABLE children ADD COLUMN access_code TEXT")
+            conn.commit()
+        # 未設定の子供にコードを発行
+        rows = conn.execute("SELECT id FROM children WHERE access_code IS NULL").fetchall()
+        for (cid,) in rows:
+            code = secrets.token_urlsafe(8)
+            conn.execute("UPDATE children SET access_code = ? WHERE id = ?", (code, cid))
+        if rows:
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning (access_code): {e}")
+
 _migrate_unit_number()
 _migrate_grading_cols()
 _migrate_child_stage()
+_migrate_child_access_code()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="和文英訳トレーニング")

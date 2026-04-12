@@ -687,7 +687,10 @@
 
 <!-- Mobile-only top header: 子供セレクタ + 鍵 -->
 <div class="mobile-header no-print">
-  <select class="child-select" x-model="currentChildId" @change="switchChild()">
+  <template x-if="kidLocked">
+    <span style="font-weight:600; font-size:14px;" x-text="children[0]?.name"></span>
+  </template>
+  <select x-show="!kidLocked" class="child-select" x-model="currentChildId" @change="switchChild()">
     <template x-for="c in children" :key="c.id">
       <option :value="c.id" x-text="c.name"></option>
     </template>
@@ -718,14 +721,14 @@
       <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'; checkPapaMessages()">
         <span class="tab-icon">&#x1FA99;</span>ポイント
       </div>
-      <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode">
+      <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode && !kidLocked">
         <span class="tab-icon">&#x2699;&#xFE0F;</span>管理
       </div>
       <div class="nav-tab hide-mobile" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
         <span x-text="parentMode ? '🔓' : '🔒'"></span>
       </div>
     </div>
-    <div class="child-switcher">
+    <div class="child-switcher" x-show="!kidLocked">
       <select class="child-select" x-model="currentChildId" @change="switchChild()">
         <template x-for="c in children" :key="c.id">
           <option :value="c.id" x-text="c.name"></option>
@@ -1304,6 +1307,22 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">アクセスURL（子供ごとの専用リンク）</div>
+      <template x-for="c in children" :key="'ac'+c.id">
+        <div style="padding:8px 0; border-bottom:1px solid var(--border-light); font-size:13px;">
+          <strong x-text="c.name"></strong>
+          <div style="margin-top:4px; display:flex; align-items:center; gap:8px;">
+            <input type="text" readonly
+              :value="location.origin + '/?kid=' + c.access_code"
+              style="flex:1; font-size:11px; padding:4px 8px; border:1px solid var(--border-light); border-radius:4px; background:var(--card-bg); color:var(--text-sub);"
+              @click="$el.select()">
+            <button class="btn btn-outline btn-sm" @click="navigator.clipboard.writeText(location.origin + '/?kid=' + c.access_code); showToast('コピーしました')">コピー</button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
         <div style="font-size:13px; font-weight:600; color:var(--text-sub);">登録端末（保護者モード）</div>
         <button class="btn btn-outline btn-sm" @click="loadParentDevices()">更新</button>
@@ -1475,6 +1494,7 @@ function app() {
     historyFilter: 'all',
     exchangeRates: { money: 10, phone: 10 },
     pointsPerClear: 1,
+    kidLocked: false,
     parentMode: false,
     adminUnlocked: false,
     showPwDialog: false,
@@ -1540,11 +1560,26 @@ function app() {
         }
       });
       await this.loadQuestions();
-      await this.loadChildren();
+      // ?kid=CODE パラメータでアクセス制限
+      const urlParams = new URLSearchParams(window.location.search);
+      const kidCode = urlParams.get('kid');
+      if (kidCode) {
+        try {
+          const lockedChild = await this.api(`/api/children/by-code/${kidCode}`);
+          this.children = [lockedChild];
+          this.kidLocked = true;
+        } catch (e) {
+          this.showToast('無効なアクセスコードです');
+          return;
+        }
+      } else {
+        await this.loadChildren();
+      }
       await this.loadSettings();
       if (this.children.length > 0) {
         const saved = localStorage.getItem('lastChildId');
-        this.currentChildId = saved && this.children.find(c => c.id == saved) ? Number(saved) : this.children[0].id;
+        this.currentChildId = (this.kidLocked || !(saved && this.children.find(c => c.id == saved)))
+          ? this.children[0].id : Number(saved);
         await this.loadChildData();
         await this.checkSession();
         await this.loadAllSummaries();
