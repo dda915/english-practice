@@ -194,10 +194,11 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
         if remaining:
             return _session_response(session, remaining, resumed=True)
         # 全部クリア済みならセッション削除して新規作成へ
-        has_batch = db.query(GradingBatch).filter(GradingBatch.session_id == session.id).first()
-        if not has_batch:
-            photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
-            for p in photos:
+        old_photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
+        for p in old_photos:
+            if p.batch_id:
+                p.session_id = -1
+            else:
                 try:
                     fp = PHOTO_DIR / p.filename
                     if fp.exists():
@@ -338,11 +339,13 @@ def clear_session(child_id: int, db: Session = Depends(get_db)):
     """セッションを手動でリセット"""
     session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
     if session:
-        # GradingBatch が紐づいていれば写真は保持（レビューページで必要）
-        has_batch = db.query(GradingBatch).filter(GradingBatch.session_id == session.id).first()
-        if not has_batch:
-            photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
-            for p in photos:
+        photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
+        for p in photos:
+            if p.batch_id:
+                # バッチ紐づき済み → session_idだけクリア（レビューページで参照可能）
+                p.session_id = -1
+            else:
+                # 未採点の写真 → ファイルごと削除
                 try:
                     fp = PHOTO_DIR / p.filename
                     if fp.exists():

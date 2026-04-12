@@ -168,6 +168,12 @@ def grade_session(session_id: int, db: Session = Depends(get_db)):
     db.add(batch)
     db.flush()
 
+    # 写真をバッチに紐づけ（セッション削除後もレビューページで参照可能にする）
+    photos_to_link = db.query(SessionPhoto).filter(SessionPhoto.session_id == session_id).all()
+    for p in photos_to_link:
+        p.batch_id = batch.id
+    db.flush()
+
     results_by_number = {}
     for r in parsed.get("results", []):
         try:
@@ -481,12 +487,19 @@ def resolve_grading(grading_id: int, body: ResolveBody, db: Session = Depends(ge
             chat_history = [{"role": m.role, "content": m.content} for m in chat_msgs]
             photos = (
                 db.query(SessionPhoto)
-                .filter(SessionPhoto.session_id == batch.session_id)
+                .filter(SessionPhoto.batch_id == batch.id)
                 .order_by(SessionPhoto.id)
                 .all()
             )
+            if not photos:
+                photos = (
+                    db.query(SessionPhoto)
+                    .filter(SessionPhoto.session_id == batch.session_id)
+                    .order_by(SessionPhoto.id)
+                    .all()
+                )
             base_url = "https://english-practice-5285.onrender.com"
-            photo_urls = [f"{base_url}/api/sessions/{batch.session_id}/photos/{p.id}/file" for p in photos]
+            photo_urls = [f"{base_url}/api/sessions/photo-by-id/{p.id}/file" for p in photos]
             send_escalation_notification(
                 child_name=child.name if child else "子供",
                 grading_id=g.id,
@@ -545,13 +558,20 @@ def list_awaiting(db: Session = Depends(get_db)):
             .all()
         )
         photos = []
-        if batch and batch.session_id:
+        if batch:
             photos = (
                 db.query(SessionPhoto)
-                .filter(SessionPhoto.session_id == batch.session_id)
+                .filter(SessionPhoto.batch_id == batch.id)
                 .order_by(SessionPhoto.id)
                 .all()
             )
+            if not photos and batch.session_id:
+                photos = (
+                    db.query(SessionPhoto)
+                    .filter(SessionPhoto.session_id == batch.session_id)
+                    .order_by(SessionPhoto.id)
+                    .all()
+                )
         result.append({
             "id": g.id,
             "child_id": batch.child_id if batch else None,
@@ -564,9 +584,9 @@ def list_awaiting(db: Session = Depends(get_db)):
             "ai_comment": g.ai_comment,
             "chat": [{"role": m.role, "content": m.content} for m in chat_msgs],
             "photos": [
-                {"id": p.id, "url": f"/api/sessions/{batch.session_id}/photos/{p.id}/file"}
+                {"id": p.id, "url": f"/api/sessions/photo-by-id/{p.id}/file"}
                 for p in photos
-            ] if batch and batch.session_id else [],
+            ],
             "created_at": g.created_at.isoformat(),
         })
     return result
@@ -704,13 +724,20 @@ def review_page(grading_id: int, db: Session = Depends(get_db)):
         .all()
     )
     photos = []
-    if batch and batch.session_id:
+    if batch:
         photos = (
             db.query(SessionPhoto)
-            .filter(SessionPhoto.session_id == batch.session_id)
+            .filter(SessionPhoto.batch_id == batch.id)
             .order_by(SessionPhoto.id)
             .all()
         )
+        if not photos and batch.session_id:
+            photos = (
+                db.query(SessionPhoto)
+                .filter(SessionPhoto.session_id == batch.session_id)
+                .order_by(SessionPhoto.id)
+                .all()
+            )
 
     already_done = g.status == "parent_confirmed"
     ai_mark = "○" if g.ai_correct else "×"
@@ -724,7 +751,7 @@ def review_page(grading_id: int, db: Session = Depends(get_db)):
 
     photos_html = ""
     for p in photos:
-        url = f"/api/sessions/{batch.session_id}/photos/{p.id}/file"
+        url = f"/api/sessions/photo-by-id/{p.id}/file"
         photos_html += f'<a href="{url}" target="_blank"><img src="{url}" style="max-width:100%; margin:6px 0; border-radius:6px; border:1px solid #ddd;"></a>'
 
     done_banner = ""

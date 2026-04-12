@@ -73,10 +73,25 @@ def _migrate_child_access_code():
     except Exception as e:
         print(f"Migration warning (access_code): {e}")
 
+def _migrate_photo_batch_id():
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "session_photos" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(session_photos)")]
+            if "batch_id" not in cols:
+                conn.execute("ALTER TABLE session_photos ADD COLUMN batch_id INTEGER")
+                conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning (photo batch_id): {e}")
+
 _migrate_unit_number()
 _migrate_grading_cols()
 _migrate_child_stage()
 _migrate_child_access_code()
+_migrate_photo_batch_id()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="和文英訳トレーニング")

@@ -92,10 +92,27 @@ def _ensure_access_code_column():
         print(f"Migration in seed (access_code): {e}")
 
 
+def _ensure_photo_batch_id():
+    """session_photosにbatch_idカラムがなければ追加"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "session_photos" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(session_photos)")]
+            if "batch_id" not in cols:
+                conn.execute("ALTER TABLE session_photos ADD COLUMN batch_id INTEGER")
+                conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration in seed (photo batch_id): {e}")
+
+
 def seed():
     _ensure_unit_number_column()
     _ensure_stage_column()
     _ensure_access_code_column()
+    _ensure_photo_batch_id()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 

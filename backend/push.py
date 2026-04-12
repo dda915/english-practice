@@ -33,17 +33,27 @@ def get_public_key() -> str:
     return os.environ.get("VAPID_PUBLIC_KEY", "")
 
 
+_last_push_error = None
+
+
+def get_last_push_error():
+    return _last_push_error
+
+
 def send_to_subscription(sub: PushSubscription, payload: dict) -> bool:
     """1件の subscription に通知を送る。endpointが死んでいたら True を返さない"""
+    global _last_push_error
     try:
         from pywebpush import webpush, WebPushException
     except ImportError:
-        print("[push] pywebpush 未インストール")
+        _last_push_error = "pywebpush 未インストール"
+        print(f"[push] {_last_push_error}")
         return False
 
     private_key = _get_private_key()
     if not private_key:
-        print("[push] VAPID_PRIVATE_KEY 未設定")
+        _last_push_error = "VAPID_PRIVATE_KEY 未設定"
+        print(f"[push] {_last_push_error}")
         return False
 
     subscription_info = {
@@ -59,11 +69,12 @@ def send_to_subscription(sub: PushSubscription, payload: dict) -> bool:
             vapid_claims=_vapid_claims(),
             ttl=86400,
         )
+        _last_push_error = None
         return True
     except WebPushException as e:
         status = getattr(e.response, "status_code", None)
+        _last_push_error = f"WebPushException ({status}): {e}"
         print(f"[push] 送信失敗 ({status}): {e}")
-        # 410 Gone / 404 → 購読消す
         if status in (404, 410):
             try:
                 db = SessionLocal()
@@ -77,6 +88,7 @@ def send_to_subscription(sub: PushSubscription, payload: dict) -> bool:
         return False
     except Exception as e:
         import traceback
+        _last_push_error = f"Exception: {e}"
         print(f"[push] 例外: {e}")
         traceback.print_exc()
         return False

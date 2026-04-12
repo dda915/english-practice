@@ -102,6 +102,18 @@ def get_photo_file(session_id: int, photo_id: int, db: Session = Depends(get_db)
     return FileResponse(path, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
+@router.get("/photo-by-id/{photo_id}/file")
+def get_photo_by_id(photo_id: int, db: Session = Depends(get_db)):
+    """バッチ紐づき写真用（セッション削除後でも取得可能）"""
+    photo = db.query(SessionPhoto).get(photo_id)
+    if not photo:
+        raise HTTPException(404, "写真が見つかりません")
+    path = PHOTO_DIR / photo.filename
+    if not path.exists():
+        raise HTTPException(404, "ファイルが見つかりません")
+    return FileResponse(path, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
 @router.delete("/{session_id}/photos/{photo_id}")
 def delete_photo(session_id: int, photo_id: int, db: Session = Depends(get_db)):
     photo = db.query(SessionPhoto).get(photo_id)

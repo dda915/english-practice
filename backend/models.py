@@ -140,6 +140,7 @@ class SessionPhoto(Base):
 
     id = Column(Integer, primary_key=True)
     session_id = Column(Integer, nullable=False, index=True)
+    batch_id = Column(Integer, nullable=True, index=True)
     filename = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False)
 
