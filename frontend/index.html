@@ -1710,7 +1710,7 @@ function app() {
         this.photos = [];
         this.gradings = [];
         this.resultIndex = 0;
-        if (this.currentSessionId) {
+        if (this.currentSessionId && res.resumed) {
           try { this.photos = await this.api(`/api/sessions/${this.currentSessionId}/photos`); } catch (e) {}
         }
         this.scoring = {};

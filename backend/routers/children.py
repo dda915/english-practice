@@ -162,9 +162,10 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
     return result
 
 
-def _session_response(session: ActiveSession, questions: list[Question]):
+def _session_response(session: ActiveSession, questions: list[Question], resumed: bool = False):
     return {
         "session_id": session.id,
+        "resumed": resumed,
         "questions": [
             {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english}
             for q in questions
@@ -191,7 +192,7 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
                 if q:
                     remaining.append(q)
         if remaining:
-            return _session_response(session, remaining)
+            return _session_response(session, remaining, resumed=True)
         # 全部クリア済みならセッション削除して新規作成へ
         has_batch = db.query(GradingBatch).filter(GradingBatch.session_id == session.id).first()
         if not has_batch:
