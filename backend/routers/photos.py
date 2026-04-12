@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db, DB_DIR, now_jst
@@ -99,7 +99,7 @@ def get_photo_file(session_id: int, photo_id: int, db: Session = Depends(get_db)
     path = PHOTO_DIR / photo.filename
     if not path.exists():
         raise HTTPException(404, "ファイルが見つかりません")
-    return FileResponse(path)
+    return FileResponse(path, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 @router.delete("/{session_id}/photos/{photo_id}")

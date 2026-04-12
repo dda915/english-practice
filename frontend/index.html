@@ -938,7 +938,7 @@
           <div class="photo-thumbs" x-show="photos.length > 0">
             <template x-for="p in photos" :key="'ph'+p.id">
               <div class="photo-thumb">
-                <img :src="p.url" @click="window.open(p.url, '_blank')">
+                <img :src="p.url + '?t=' + (p.created_at || '')" @click="window.open(p.url, '_blank')">
                 <button class="photo-del" @click="deletePhoto(p)" title="削除">&#x00D7;</button>
               </div>
             </template>
