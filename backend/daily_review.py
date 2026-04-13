@@ -175,9 +175,10 @@ def _generate_review_message(stats: dict) -> str:
         )
 
 
-def send_daily_review():
-    """全ボーナス対象の子供に振り返りLINEを送信"""
+def send_daily_review() -> dict:
+    """全ボーナス対象の子供に振り返りLINEを送信。結果を返す。"""
     import json
+    result = {"children": [], "error": None}
     db = SessionLocal()
     try:
         now = now_jst()
@@ -188,12 +189,23 @@ def send_daily_review():
         except (json.JSONDecodeError, TypeError):
             child_ids = []
 
+        result["child_ids"] = child_ids
+
         for child_id in child_ids:
             stats = _get_daily_stats(db, child_id, now)
             message = _generate_review_message(stats)
             print(f"[daily review] {stats['child_name']}: {message}")
-            broadcast_line_message(message)
+            sent = broadcast_line_message(message)
+            result["children"].append({
+                "child_id": child_id,
+                "name": stats["child_name"],
+                "message": message,
+                "sent": sent,
+                "total_answers": stats["total_answers"],
+            })
     except Exception as e:
         print(f"[daily review] エラー: {e}")
+        result["error"] = str(e)
     finally:
         db.close()
+    return result
