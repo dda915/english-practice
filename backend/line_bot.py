@@ -21,7 +21,7 @@ def send_line_message(user_id: str, message: str) -> bool:
     payload = json.dumps({
         "to": user_id,
         "messages": [{"type": "text", "text": message}],
-    }).encode("utf-8")
+    }, ensure_ascii=False).encode("utf-8")
 
     req = urllib.request.Request(
         "https://api.line.me/v2/bot/message/push",
