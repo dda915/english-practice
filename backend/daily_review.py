@@ -9,7 +9,8 @@ from .line_bot import broadcast_line_message
 
 def _get_daily_stats(db, child_id: int, today: datetime):
     """今日の実績を集計"""
-    start = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    # DBのdatetimeはnaiveなのでnaiveで比較
+    start = today.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
     end = start + timedelta(days=1)
 
     # 今日の解答
@@ -80,7 +81,7 @@ def _get_daily_stats(db, child_id: int, today: datetime):
     streak = 0
     check_date = today.date()
     while True:
-        day_start = datetime(check_date.year, check_date.month, check_date.day, tzinfo=JST)
+        day_start = datetime(check_date.year, check_date.month, check_date.day)
         day_end = day_start + timedelta(days=1)
         has_activity = (
             db.query(Answer)
