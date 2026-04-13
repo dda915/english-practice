@@ -746,13 +746,15 @@
   <!-- ══ Practice ══ -->
   <div x-show="tab === 'practice'" class="fade-in">
 
-    <!-- 通知許可バナー (未購読時のみ) -->
+    <!-- 通知許可バナー (現在無効化中) -->
+    <!--
     <div x-show="pushSupported && !pushSubscribed" class="notif-banner" style="background:#fff7d6; border-color:#e6c84a; color:#7a5a00;">
       <div style="flex:1;">
         <div style="font-size:13px; font-weight:600;">🔔 通知をオンにすると <span x-text="parentMode ? '娘から確認依頼が来たとき' : 'お父さんから返事が来たとき'"></span> すぐにお知らせします</div>
       </div>
       <button class="btn btn-primary btn-sm" @click="enablePush()" style="white-space:nowrap;">オンにする</button>
     </div>
+    -->
 
     <!-- お父さんからの確認結果 通知バナー -->
     <template x-for="n in aiNotifications" :key="'ntf'+n.id">
@@ -1293,18 +1295,7 @@
       </template>
     </div>
 
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">プッシュ通知</div>
-      <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">
-        現在: <strong x-text="pushSubscribed ? 'オン' : 'オフ'"></strong>
-        <span x-show="!pushSupported" style="color:var(--wrong);">（このブラウザは非対応）</span>
-      </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn btn-primary btn-sm" @click="enablePush()" x-show="pushSupported && !pushSubscribed">オンにする</button>
-        <button class="btn btn-outline btn-sm" @click="disablePush()" x-show="pushSubscribed">オフにする</button>
-        <button class="btn btn-outline btn-sm" @click="testPush()" x-show="pushSubscribed">テスト送信</button>
-      </div>
-    </div>
+    <!-- プッシュ通知カード（現在無効化中）-->
 
     <div class="card" style="margin-bottom:24px;">
       <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">アクセスURL（子供ごとの専用リンク）</div>
