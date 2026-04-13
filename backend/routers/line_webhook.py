@@ -49,3 +49,20 @@ async def line_webhook(request: Request, db: Session = Depends(get_db)):
                 db.commit()
 
     return {"ok": True}
+
+
+@router.get("/api/line/friends")
+def list_friends(db: Session = Depends(get_db)):
+    friends = db.query(LineFriend).order_by(LineFriend.id).all()
+    return [
+        {"id": f.id, "line_user_id": f.line_user_id, "display_name": f.display_name, "created_at": f.created_at.isoformat() if f.created_at else None}
+        for f in friends
+    ]
+
+
+@router.post("/api/line/test")
+def test_send():
+    """テスト送信（振り返りメッセージ）"""
+    from ..daily_review import send_daily_review
+    send_daily_review()
+    return {"ok": True, "message": "振り返りメッセージを送信しました"}
