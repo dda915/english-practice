@@ -213,29 +213,35 @@ async def _cleanup_loop():
 
 
 async def _bonus_scheduler_loop():
-    """毎日6:30と18:00にLINEボーナス通知を送信"""
+    """毎日6:30/18:00にLINEボーナス通知、21:50に振り返りを送信"""
     from .line_bot import broadcast_line_message
+    from .daily_review import send_daily_review
     sent_today = set()
     while True:
         try:
             now = now_jst()
-            if now.hour == 6 and now.minute == 30 and f"{now.date()}-6:30" not in sent_today:
-                sent_today.add(f"{now.date()}-6:30")
+            key_prefix = str(now.date())
+
+            if now.hour == 6 and now.minute == 30 and f"{key_prefix}-6:30" not in sent_today:
+                sent_today.add(f"{key_prefix}-6:30")
                 broadcast_line_message(
                     "🌅 おはよう！朝のボーナスタイム開始！\n"
                     "今から15分間、1問クリアで8ポイントだよ！\n"
                     "急いでPaePaeを開こう！💪"
                 )
-            elif now.hour == 18 and now.minute == 0 and f"{now.date()}-18:0" not in sent_today:
-                sent_today.add(f"{now.date()}-18:0")
+            elif now.hour == 18 and now.minute == 0 and f"{key_prefix}-18:0" not in sent_today:
+                sent_today.add(f"{key_prefix}-18:0")
                 broadcast_line_message(
                     "🌆 夕方のボーナスタイム開始！\n"
                     "今から15分間、1問クリアで8ポイントだよ！\n"
                     "PaePaeを開こう！💪"
                 )
+            elif now.hour == 21 and now.minute == 50 and f"{key_prefix}-21:50" not in sent_today:
+                sent_today.add(f"{key_prefix}-21:50")
+                send_daily_review()
+
             # Clean old entries daily
-            today_str = str(now.date())
-            sent_today = {k for k in sent_today if k.startswith(today_str)}
+            sent_today = {k for k in sent_today if k.startswith(key_prefix)}
         except Exception as e:
             print(f"[bonus scheduler] {e}")
         await asyncio.sleep(30)
