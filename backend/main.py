@@ -9,7 +9,7 @@ import sqlite3
 
 from .database import engine, Base, DATABASE_URL, now_jst
 from .models import Question, Child, Answer, PointLog, Setting
-from .routers import questions, children, answers, points, settings, photos, grading, messages, push, parent_devices
+from .routers import questions, children, answers, points, settings, photos, grading, messages, push, parent_devices, line_webhook, bonus
 
 # マイグレーション: unit_numberカラム追加（create_allより前に実行）
 def _migrate_unit_number():
@@ -87,11 +87,32 @@ def _migrate_photo_batch_id():
     except Exception as e:
         print(f"Migration warning (photo batch_id): {e}")
 
+
+def _migrate_bonus_defaults():
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        # points_per_clear を 1 → 2 に更新（初回のみ）
+        ppc = conn.execute("SELECT value FROM settings WHERE key = 'points_per_clear'").fetchone()
+        if ppc and ppc[0] == "1":
+            conn.execute("UPDATE settings SET value = '2' WHERE key = 'points_per_clear'")
+        # ボーナス関連デフォルト設定
+        for key, val in [("bonus_points", "8"), ("bonus_child_ids", "[3]")]:
+            existing = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+            if not existing:
+                conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, val))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning (bonus defaults): {e}")
+
+
 _migrate_unit_number()
 _migrate_grading_cols()
 _migrate_child_stage()
 _migrate_child_access_code()
 _migrate_photo_batch_id()
+_migrate_bonus_defaults()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="和文英訳トレーニング")
@@ -106,6 +127,8 @@ app.include_router(grading.router)
 app.include_router(messages.router)
 app.include_router(push.router)
 app.include_router(parent_devices.router)
+app.include_router(line_webhook.router)
+app.include_router(bonus.router)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
@@ -189,9 +212,39 @@ async def _cleanup_loop():
         await asyncio.sleep(24 * 60 * 60)  # 24時間
 
 
+async def _bonus_scheduler_loop():
+    """毎日6:30と18:00にLINEボーナス通知を送信"""
+    from .line_bot import broadcast_line_message
+    sent_today = set()
+    while True:
+        try:
+            now = now_jst()
+            if now.hour == 6 and now.minute == 30 and f"{now.date()}-6:30" not in sent_today:
+                sent_today.add(f"{now.date()}-6:30")
+                broadcast_line_message(
+                    "🌅 おはよう！朝のボーナスタイム開始！\n"
+                    "今から15分間、1問クリアで8ポイントだよ！\n"
+                    "急いでPaePaeを開こう！💪"
+                )
+            elif now.hour == 18 and now.minute == 0 and f"{now.date()}-18:0" not in sent_today:
+                sent_today.add(f"{now.date()}-18:0")
+                broadcast_line_message(
+                    "🌆 夕方のボーナスタイム開始！\n"
+                    "今から15分間、1問クリアで8ポイントだよ！\n"
+                    "PaePaeを開こう！💪"
+                )
+            # Clean old entries daily
+            today_str = str(now.date())
+            sent_today = {k for k in sent_today if k.startswith(today_str)}
+        except Exception as e:
+            print(f"[bonus scheduler] {e}")
+        await asyncio.sleep(30)
+
+
 @app.on_event("startup")
 async def _start_cleanup():
     asyncio.create_task(_cleanup_loop())
+    asyncio.create_task(_bonus_scheduler_loop())
 
 
 

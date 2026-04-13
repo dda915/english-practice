@@ -23,6 +23,7 @@ from ..models import (
     Setting,
 )
 from ..backup import backup_to_dropbox
+from ..bonus import get_points_per_clear as get_bonus_points
 from ..mail import send_escalation_notification, send_activity
 from ..push import notify_parents, notify_child
 from .photos import PHOTO_DIR
@@ -319,8 +320,7 @@ def _confirm_grading(db: Session, g: Grading, batch: GradingBatch, final_correct
     g.final_correct = final_correct
     if not was_cleared and now_cleared:
         q = db.query(Question).get(g.question_id)
-        ppc_setting = db.query(Setting).get("points_per_clear")
-        points_per_clear = int(ppc_setting.value) if ppc_setting else 1
+        points_per_clear = get_bonus_points(db, batch.child_id)
         db.add(PointLog(
             child_id=batch.child_id,
             logged_date=now_jst().date(),
@@ -622,8 +622,7 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
     earned = 0
     if not was_cleared and now_cleared:
         q = db.query(Question).get(g.question_id)
-        ppc_setting = db.query(Setting).get("points_per_clear")
-        points_per_clear = int(ppc_setting.value) if ppc_setting else 1
+        points_per_clear = get_bonus_points(db, batch.child_id)
         db.add(PointLog(
             child_id=batch.child_id,
             logged_date=now_jst().date(),

@@ -1432,6 +1432,36 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">ボーナスタイム</div>
+        <button class="btn btn-outline btn-sm" @click="loadBonusStatus()">更新</button>
+      </div>
+      <div style="padding:12px; border-radius:8px; margin-bottom:12px;"
+           :style="bonusStatus.is_bonus ? 'background:#fff3e0; border:1px solid #ff9800;' : 'background:var(--card-bg); border:1px solid var(--border-light);'">
+        <div style="font-size:16px; font-weight:700; margin-bottom:4px;">
+          <span x-show="bonusStatus.is_bonus" style="color:#e65100;">&#x1F525; ボーナス中!</span>
+          <span x-show="!bonusStatus.is_bonus" style="color:var(--text-sub);">通常モード</span>
+        </div>
+        <div style="font-size:13px; color:var(--text-sub);">
+          現在のクリアポイント: <strong x-text="bonusStatus.points + 'pt'"></strong>
+          <span x-show="bonusStatus.reason === 'guerrilla'" style="color:#e65100; font-size:12px;">（ゲリラ）</span>
+          <span x-show="bonusStatus.reason === 'scheduled'" style="color:#e65100; font-size:12px;">（定期）</span>
+        </div>
+        <div x-show="bonusStatus.guerrilla_until" style="font-size:12px; color:var(--text-sub); margin-top:4px;">
+          ゲリラ終了: <span x-text="bonusStatus.guerrilla_until ? formatDateTime(bonusStatus.guerrilla_until) : ''"></span>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+        <button class="btn btn-primary btn-sm" @click="startGuerrilla()" style="background:#e65100;">&#x1F389; ゲリラボーナス開始</button>
+      </div>
+      <div style="font-size:12px; color:var(--text-sub);">
+        通常: <span x-text="bonusStatus.normal_points"></span>pt / ボーナス: <span x-text="bonusStatus.bonus_points"></span>pt<br>
+        ボーナス時間帯: 6:30-6:45, 18:00-18:15<br>
+        対象子供ID: <span x-text="JSON.stringify(bonusStatus.bonus_child_ids || [])"></span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
       <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">CSVインポート</div>
       <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">カラム構成: 問題番号, 和文, 模範英訳</p>
       <div class="csv-import-area"
@@ -1488,7 +1518,7 @@ function app() {
     printMode: null,
     historyFilter: 'all',
     exchangeRates: { money: 10, phone: 10 },
-    pointsPerClear: 1,
+    pointsPerClear: 2,
     kidLocked: false,
     newChildName: '',
     parentMode: false,
@@ -1519,6 +1549,7 @@ function app() {
     parentDevices: [],
     showRegisterDialog: false,
     registerDeviceName: '',
+    bonusStatus: { is_bonus: false, points: 2, reason: '', guerrilla_until: null, normal_points: 2, bonus_points: 8, bonus_child_ids: [] },
 
     get currentChildName() {
       const c = this.children.find(c => c.id == this.currentChildId);
@@ -1822,6 +1853,26 @@ function app() {
       this.loadAwaitingParent();
       this.loadApiUsage();
       this.loadParentDevices();
+      this.loadBonusStatus();
+    },
+
+    async loadBonusStatus() {
+      try {
+        this.bonusStatus = await this.api('/api/bonus/status');
+      } catch (e) {
+        console.error('bonus status load error', e);
+      }
+    },
+
+    async startGuerrilla() {
+      if (!confirm('ゲリラボーナスを開始しますか？\n15分間、対象の子供は1問クリアで8ptになります。\nLINE通知も送信されます。')) return;
+      try {
+        const r = await this.api('/api/bonus/guerrilla', { method: 'POST' });
+        this.showToast('ゲリラボーナス開始！');
+        await this.loadBonusStatus();
+      } catch (e) {
+        alert('エラー: ' + e.message);
+      }
     },
 
     get unreadMessagesCount() {

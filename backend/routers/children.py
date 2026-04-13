@@ -116,9 +116,9 @@ def _annotate_history(q_answers, points_per_clear, stage: int = 1):
 def _get_points_per_clear(db: Session) -> int:
     s = db.query(Setting).get("points_per_clear")
     try:
-        return int(s.value) if s else 1
+        return int(s.value) if s else 2
     except Exception:
-        return 1
+        return 2
 
 
 @router.get("/{child_id}/progress")

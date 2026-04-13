@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db, now_jst
 from ..models import Answer, Question, PointLog, Child, Setting
+from ..bonus import get_points_per_clear as get_bonus_points
 from ..backup import backup_to_dropbox
 
 router = APIRouter(prefix="/api/children", tags=["answers"])
@@ -69,8 +70,7 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
 
     # Award points for newly cleared
     if newly_cleared:
-        ppc_setting = db.query(Setting).get("points_per_clear")
-        points_per_clear = int(ppc_setting.value) if ppc_setting else 1
+        points_per_clear = get_bonus_points(db, child_id)
         total_points = len(newly_cleared) * points_per_clear
         nums = ", ".join(f"問{q.number}" for q in newly_cleared)
         db.add(PointLog(

@@ -168,6 +168,15 @@ class EmailThread(Base):
     message_id = Column(Text, nullable=False)  # 最初のメールの Message-ID
 
 
+class LineFriend(Base):
+    __tablename__ = "line_friends"
+
+    id = Column(Integer, primary_key=True)
+    line_user_id = Column(Text, nullable=False, unique=True, index=True)
+    display_name = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False)
+
+
 class ParentDevice(Base):
     __tablename__ = "parent_devices"
 
