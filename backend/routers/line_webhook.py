@@ -66,3 +66,11 @@ def test_send():
     from ..daily_review import send_daily_review
     send_daily_review()
     return {"ok": True, "message": "振り返りメッセージを送信しました"}
+
+
+@router.post("/api/line/test-simple")
+def test_simple():
+    """固定メッセージで直接broadcast（切り分け用）"""
+    from ..line_bot import broadcast_line_message
+    sent = broadcast_line_message("PaePaeからのテスト送信です！🌟")
+    return {"ok": True, "sent": sent}
