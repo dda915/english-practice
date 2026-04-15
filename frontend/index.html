@@ -504,6 +504,20 @@
   </div>
 </div>
 
+<!-- ゲリラボーナス通知カード -->
+<div class="pw-overlay" x-show="bonusCard" x-cloak style="overflow-y:auto;">
+  <div class="pw-dialog" style="max-width:360px; text-align:center; padding:28px 24px; background:linear-gradient(135deg, #fff3e0, #ffe0b2);">
+    <div style="font-size:48px; margin-bottom:8px;">🎉🔥</div>
+    <div style="font-size:20px; font-weight:800; color:#e65100; margin-bottom:8px;">ボーナスタイム！</div>
+    <div style="font-size:15px; color:#bf360c; line-height:1.6; margin-bottom:16px;">
+      1問クリアで <strong x-text="bonusCard?.points + 'ポイント'" style="font-size:22px; color:#e65100;"></strong>！<br>
+      <span style="font-size:13px;" x-text="bonusCard?.remaining + '分以内にクリアしよう！'"></span>
+    </div>
+    <button class="btn btn-primary" style="width:100%; padding:14px; font-size:16px; font-weight:700; background:#e65100;"
+            @click="bonusCard = null">やるぞ！💪</button>
+  </div>
+</div>
+
 <!-- 採点サマリーモーダル -->
 <!-- パパからのメッセージカード -->
 <div class="pw-overlay" x-show="papaCard" x-cloak style="overflow-y:auto;">
@@ -705,20 +719,20 @@
   <div class="nav-inner">
     <div class="nav-title">&#x1F4D6; &#x548C;&#x6587;&#x82F1;&#x8A33;</div>
     <div class="nav-tabs">
-      <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'; checkPapaMessages()">
+      <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'; checkPapaMessages(); checkActiveBonus()">
         <span class="tab-icon">&#x270F;&#xFE0F;</span>出題
       </div>
       <div class="nav-tab" :class="tab === 'scoring' && 'active'" @click="tab = 'scoring'" x-show="parentMode">
         <span class="tab-icon">&#x1F4DD;</span>採点
       </div>
-      <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'; checkPapaMessages()">
+      <div class="nav-tab" :class="tab === 'history' && 'active'" @click="tab = 'history'; checkPapaMessages(); checkActiveBonus()">
         <span class="tab-icon">&#x1F4CA;</span>履歴
       </div>
       <div class="nav-tab" :class="tab === 'messages' && 'active'" @click="openMessages()" style="position:relative;">
         <span class="tab-icon">&#x1F4AC;</span>メッセージ
         <span x-show="unreadMessagesCount > 0" class="tab-badge" x-text="unreadMessagesCount"></span>
       </div>
-      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'; checkPapaMessages()">
+      <div class="nav-tab" :class="tab === 'points' && 'active'" @click="tab = 'points'; checkPapaMessages(); checkActiveBonus()">
         <span class="tab-icon">&#x1FA99;</span>ポイント
       </div>
       <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode && !kidLocked">
@@ -1451,7 +1465,13 @@
           ゲリラ終了: <span x-text="bonusStatus.guerrilla_until ? formatDateTime(bonusStatus.guerrilla_until) : ''"></span>
         </div>
       </div>
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+        <label style="font-size:12px; color:var(--text-sub);">時間:
+          <input type="number" x-model.number="guerrillaMinutes" min="1" max="120" style="width:50px; padding:4px 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">分
+        </label>
+        <label style="font-size:12px; color:var(--text-sub);">ポイント:
+          <input type="number" x-model.number="guerrillaPoints" min="1" max="100" style="width:50px; padding:4px 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">pt
+        </label>
         <button class="btn btn-primary btn-sm" @click="startGuerrilla()" style="background:#e65100;">&#x1F389; ゲリラボーナス開始</button>
       </div>
       <div style="font-size:12px; color:var(--text-sub);">
@@ -1549,7 +1569,11 @@ function app() {
     parentDevices: [],
     showRegisterDialog: false,
     registerDeviceName: '',
-    bonusStatus: { is_bonus: false, points: 2, reason: '', guerrilla_until: null, normal_points: 2, bonus_points: 8, bonus_child_ids: [] },
+    bonusStatus: { is_bonus: false, points: 2, reason: '', guerrilla_until: null, guerrilla_points: null, normal_points: 2, bonus_points: 8, bonus_child_ids: [] },
+    guerrillaMinutes: 15,
+    guerrillaPoints: 8,
+    bonusCard: null,
+    _lastSeenBonusUntil: null,
 
     get currentChildName() {
       const c = this.children.find(c => c.id == this.currentChildId);
@@ -1584,6 +1608,7 @@ function app() {
         if (document.visibilityState === 'visible') {
           this.checkVersion();
           this.checkPapaMessages();
+          this.checkActiveBonus();
         }
       });
       await this.loadQuestions();
@@ -1722,6 +1747,7 @@ function app() {
       await this.checkVersion();
       if (this.versionReloading) return;
       this.checkPapaMessages();
+      this.checkActiveBonus();
       this.loading = true;
       await this.loadSettings();
       try {
@@ -1865,10 +1891,15 @@ function app() {
     },
 
     async startGuerrilla() {
-      if (!confirm('ゲリラボーナスを開始しますか？\n15分間、対象の子供は1問クリアで8ptになります。\nLINE通知も送信されます。')) return;
+      const m = this.guerrillaMinutes || 15;
+      const p = this.guerrillaPoints || 8;
+      if (!confirm(`ゲリラボーナスを開始しますか？\n${m}分間、1問クリアで${p}ptになります。\nLINE通知も送信されます。`)) return;
       try {
-        const r = await this.api('/api/bonus/guerrilla', { method: 'POST' });
-        this.showToast('ゲリラボーナス開始！');
+        const r = await this.api('/api/bonus/guerrilla', {
+          method: 'POST',
+          body: JSON.stringify({ minutes: m, points: p }),
+        });
+        this.showToast(`ゲリラボーナス開始！ ${m}分間 ${p}pt`);
         await this.loadBonusStatus();
       } catch (e) {
         alert('エラー: ' + e.message);
@@ -1906,6 +1937,20 @@ function app() {
           await this.api(`/api/messages/${msg.id}/seen`, { method: 'POST' });
         } catch (e) {}
       }
+    },
+
+    async checkActiveBonus() {
+      if (this.parentMode || this.bonusCard) return;
+      try {
+        const s = await this.api('/api/bonus/status');
+        if (s.is_bonus && s.reason === 'guerrilla' && s.guerrilla_until) {
+          // 同じゲリラボーナスなら再表示しない
+          if (this._lastSeenBonusUntil === s.guerrilla_until) return;
+          this._lastSeenBonusUntil = s.guerrilla_until;
+          const remaining = Math.max(1, Math.ceil((new Date(s.guerrilla_until) - new Date()) / 60000));
+          this.bonusCard = { points: s.guerrilla_points || s.bonus_points, remaining };
+        }
+      } catch (e) {}
     },
 
     async replyPapaCard(text) {
@@ -2360,6 +2405,7 @@ function app() {
       await this.loadChildData();
       this.showSummary = true;
       this.checkPapaMessages();
+      this.checkActiveBonus();
     },
 
     get summaryStats() {
@@ -2462,6 +2508,7 @@ function app() {
       await this.checkVersion();
       if (this.versionReloading) return;
       this.checkPapaMessages();
+      this.checkActiveBonus();
       this.loading = true;
       try {
         const result = await this.api(`/api/children/${this.currentChildId}/points/spend`, {

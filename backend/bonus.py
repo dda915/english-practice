@@ -39,7 +39,9 @@ def is_bonus_time(db: Session, child_id: int) -> tuple[bool, int, str]:
             if guerrilla_until.tzinfo is None:
                 guerrilla_until = guerrilla_until.replace(tzinfo=JST)
             if now < guerrilla_until:
-                return True, bonus_points, "guerrilla"
+                guerrilla_pts_str = _get_setting(db, "guerrilla_bonus_points", "")
+                guerrilla_pts = int(guerrilla_pts_str) if guerrilla_pts_str else bonus_points
+                return True, guerrilla_pts, "guerrilla"
         except (ValueError, TypeError):
             pass
 
