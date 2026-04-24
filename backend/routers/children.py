@@ -84,6 +84,18 @@ def _get_cleared_set(db: Session, child_id: int, stage: int | None = None) -> se
     return {qid for qid, (c, w) in stats.items() if c > w + (stage - 1)}
 
 
+def _get_awaiting_parent_set(db: Session, child_id: int) -> set[int]:
+    """不服申立中（awaiting_parent）の問題IDセットを取得"""
+    from ..models import Grading, GradingBatch
+    rows = (
+        db.query(Grading.question_id)
+        .join(GradingBatch, Grading.batch_id == GradingBatch.id)
+        .filter(GradingBatch.child_id == child_id, Grading.status == "awaiting_parent")
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
 def _annotate_history(q_answers, points_per_clear, stage: int = 1):
     """各解答に cleared_by_this / points_earned を付与"""
     history = []
@@ -180,6 +192,8 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
         raise HTTPException(404, "子供が見つかりません")
 
     cleared = _get_cleared_set(db, child_id)
+    awaiting = _get_awaiting_parent_set(db, child_id)
+    exclude = cleared | awaiting
 
     # 既存セッションがあればそれを返す
     session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
@@ -187,7 +201,7 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
         qids = json.loads(session.question_ids)
         remaining = []
         for qid in qids:
-            if qid not in cleared:
+            if qid not in exclude:
                 q = db.query(Question).get(qid)
                 if q:
                     remaining.append(q)
@@ -211,7 +225,7 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
 
     # 新規セッション作成
     questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
-    uncleared = [q for q in questions if q.id not in cleared]
+    uncleared = [q for q in questions if q.id not in exclude]
     batch = uncleared[:size]
 
     if batch:
