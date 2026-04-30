@@ -123,11 +123,12 @@ def _call_claude(questions: list[Question], photo_paths: list[Path]):
 
     text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
     # JSON抽出（余計な文字が混じった場合の保険）
-    m = re.search(r"\{.*\}", text, re.DOTALL)
+    m = re.search(r"\{", text)
     if not m:
         raise HTTPException(500, f"AI応答のパースに失敗しました: {text[:200]}")
     try:
-        parsed = json.loads(m.group(0))
+        decoder = json.JSONDecoder()
+        parsed, _ = decoder.raw_decode(text, m.start())
     except json.JSONDecodeError as e:
         raise HTTPException(500, f"AI応答のJSON解析失敗: {e}")
 
