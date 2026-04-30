@@ -1,11 +1,31 @@
 import csv
 import io
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Question
 
 router = APIRouter(prefix="/api/questions", tags=["questions"])
+
+
+class QuestionBody(BaseModel):
+    number: int
+    japanese: str
+    english: str
+    unit_number: float = 0
+
+
+@router.post("")
+def add_question(body: QuestionBody, db: Session = Depends(get_db)):
+    existing = db.query(Question).filter(Question.number == body.number).first()
+    if existing:
+        raise HTTPException(400, f"問題番号 {body.number} は既に存在します")
+    q = Question(number=body.number, unit_number=body.unit_number, japanese=body.japanese, english=body.english)
+    db.add(q)
+    db.commit()
+    db.refresh(q)
+    return {"id": q.id, "number": q.number, "unit_number": q.unit_number, "japanese": q.japanese, "english": q.english}
 
 
 @router.get("")
