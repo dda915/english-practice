@@ -28,6 +28,16 @@ def add_question(body: QuestionBody, db: Session = Depends(get_db)):
     return {"id": q.id, "number": q.number, "unit_number": q.unit_number, "japanese": q.japanese, "english": q.english}
 
 
+@router.delete("/{number}")
+def delete_question(number: int, db: Session = Depends(get_db)):
+    q = db.query(Question).filter(Question.number == number).first()
+    if not q:
+        raise HTTPException(404, f"問題番号 {number} が見つかりません")
+    db.delete(q)
+    db.commit()
+    return {"deleted": number}
+
+
 @router.get("")
 def list_questions(db: Session = Depends(get_db)):
     qs = db.query(Question).order_by(Question.unit_number, Question.number).all()
