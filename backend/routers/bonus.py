@@ -15,7 +15,7 @@ router = APIRouter(tags=["bonus"])
 
 class GuerrillaRequest(BaseModel):
     minutes: int = Field(default=15, ge=1, le=120)
-    points: int = Field(default=8, ge=1, le=100)
+    points: float = Field(default=8, ge=0.1, le=100)
 
 
 def _get_setting(db: Session, key: str, default: str) -> str:
@@ -44,15 +44,15 @@ def bonus_status(db: Session = Depends(get_db)):
 
     guerrilla_until = _get_setting(db, "guerrilla_bonus_until", "")
     guerrilla_points = _get_setting(db, "guerrilla_bonus_points", "")
-    normal_points = int(_get_setting(db, "points_per_clear", "2"))
-    bonus_points = int(_get_setting(db, "bonus_points", "8"))
+    normal_points = float(_get_setting(db, "points_per_clear", "2"))
+    bonus_points = float(_get_setting(db, "bonus_points", "8"))
 
     return {
         "is_bonus": _is_bonus,
         "points": points,
         "reason": reason,
         "guerrilla_until": guerrilla_until or None,
-        "guerrilla_points": int(guerrilla_points) if guerrilla_points else None,
+        "guerrilla_points": float(guerrilla_points) if guerrilla_points else None,
         "normal_points": normal_points,
         "bonus_points": bonus_points,
         "bonus_child_ids": bonus_child_ids,

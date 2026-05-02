@@ -8,9 +8,9 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
 class SettingsUpdate(BaseModel):
-    exchange_rate_money: int | None = None
-    exchange_rate_phone: int | None = None
-    points_per_clear: int | None = None
+    exchange_rate_money: float | None = None
+    exchange_rate_phone: float | None = None
+    points_per_clear: float | None = None
     batch_size: int | None = None
 
 
@@ -30,9 +30,9 @@ def _set_setting(db: Session, key: str, value: str):
 @router.get("")
 def get_settings(db: Session = Depends(get_db)):
     return {
-        "exchange_rate_money": int(_get_setting(db, "exchange_rate_money", "10")),
-        "exchange_rate_phone": int(_get_setting(db, "exchange_rate_phone", "10")),
-        "points_per_clear": int(_get_setting(db, "points_per_clear", "1")),
+        "exchange_rate_money": float(_get_setting(db, "exchange_rate_money", "10")),
+        "exchange_rate_phone": float(_get_setting(db, "exchange_rate_phone", "10")),
+        "points_per_clear": float(_get_setting(db, "points_per_clear", "1")),
         "batch_size": int(_get_setting(db, "batch_size", "10")),
     }
 

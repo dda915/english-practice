@@ -17,8 +17,8 @@ def is_bonus_time(db: Session, child_id: int) -> tuple[bool, int, str]:
     ボーナスタイム判定。
     Returns: (is_bonus, points, reason)
     """
-    normal_points = int(_get_setting(db, "points_per_clear", "2"))
-    bonus_points = int(_get_setting(db, "bonus_points", "8"))
+    normal_points = float(_get_setting(db, "points_per_clear", "2"))
+    bonus_points = float(_get_setting(db, "bonus_points", "8"))
 
     # ボーナス対象の子供IDリスト
     try:
@@ -40,7 +40,7 @@ def is_bonus_time(db: Session, child_id: int) -> tuple[bool, int, str]:
                 guerrilla_until = guerrilla_until.replace(tzinfo=JST)
             if now < guerrilla_until:
                 guerrilla_pts_str = _get_setting(db, "guerrilla_bonus_points", "")
-                guerrilla_pts = int(guerrilla_pts_str) if guerrilla_pts_str else bonus_points
+                guerrilla_pts = float(guerrilla_pts_str) if guerrilla_pts_str else bonus_points
                 return True, guerrilla_pts, "guerrilla"
         except (ValueError, TypeError):
             pass
@@ -55,7 +55,7 @@ def is_bonus_time(db: Session, child_id: int) -> tuple[bool, int, str]:
     return False, normal_points, ""
 
 
-def get_points_per_clear(db: Session, child_id: int) -> int:
+def get_points_per_clear(db: Session, child_id: int) -> float:
     """
     child_id に応じたクリアポイントを返す。
     ボーナスタイム中かつ対象の子供なら bonus_points、それ以外は通常 points_per_clear。

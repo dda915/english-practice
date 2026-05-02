@@ -46,7 +46,7 @@ class PointLog(Base):
     id = Column(Integer, primary_key=True)
     child_id = Column(Integer, ForeignKey("children.id"), nullable=False, index=True)
     logged_date = Column(Date, nullable=False)
-    amount = Column(Integer, nullable=False)
+    amount = Column(Float, nullable=False)
     description = Column(Text, nullable=False)
 
     child = relationship("Child", back_populates="point_logs")
@@ -152,8 +152,8 @@ class ExchangeRequest(Base):
     child_id = Column(Integer, ForeignKey("children.id"), nullable=False, index=True)
     requested_date = Column(Date, nullable=False)
     exchange_type = Column(Text, nullable=False)  # "money" or "phone"
-    points = Column(Integer, nullable=False)
-    converted_value = Column(Integer, nullable=False)  # 円 or 分
+    points = Column(Float, nullable=False)
+    converted_value = Column(Float, nullable=False)  # 円 or 分
     fulfilled = Column(Boolean, nullable=False, default=False)
     fulfilled_at = Column(DateTime, nullable=True)
 

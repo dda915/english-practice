@@ -13,16 +13,16 @@ JST = timezone(timedelta(hours=9))
 
 
 class SpendRequest(BaseModel):
-    amount: int
+    amount: float
     type: str  # "money" or "phone"
 
 
-def _get_balance(db: Session, child_id: int) -> int:
+def _get_balance(db: Session, child_id: int) -> float:
     logs = db.query(PointLog).filter(PointLog.child_id == child_id).all()
     return sum(l.amount for l in logs)
 
 
-def _get_pending_points(db: Session, child_id: int) -> int:
+def _get_pending_points(db: Session, child_id: int) -> float:
     """未処理の申請で予約されているポイント合計"""
     reqs = db.query(ExchangeRequest).filter(
         ExchangeRequest.child_id == child_id,
@@ -69,7 +69,7 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
         raise HTTPException(404, "子供が見つかりません")
 
     if body.amount <= 0:
-        raise HTTPException(400, "ポイント数は1以上にしてください")
+        raise HTTPException(400, "ポイント数は0より大きくしてください")
 
     # 残高 - 申請中ポイント = 使用可能ポイント
     balance = _get_balance(db, child_id)
@@ -81,8 +81,8 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
     # Get exchange rates
     money_rate = db.query(Setting).get("exchange_rate_money")
     phone_rate = db.query(Setting).get("exchange_rate_phone")
-    money_val = int(money_rate.value) if money_rate else 10
-    phone_val = int(phone_rate.value) if phone_rate else 10
+    money_val = float(money_rate.value) if money_rate else 10
+    phone_val = float(phone_rate.value) if phone_rate else 10
 
     if body.type == "money":
         converted = body.amount * money_val

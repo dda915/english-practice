@@ -1400,17 +1400,17 @@
       <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント・交換レート（全員共通）</div>
       <div class="config-row">
         <span class="config-label">1問クリア</span>
-        <input type="number" class="config-input" x-model.number="pointsPerClear" min="1" @change="saveSettings()">
+        <input type="number" class="config-input" x-model.number="pointsPerClear" min="0.1" step="0.1" @change="saveSettings()">
         <span style="font-size:13px; color:var(--text-sub)">pt</span>
       </div>
       <div class="config-row">
         <span class="config-label">1pt → お金</span>
-        <input type="number" class="config-input" x-model.number="exchangeRates.money" min="1" @change="saveSettings()">
+        <input type="number" class="config-input" x-model.number="exchangeRates.money" min="0.1" step="0.1" @change="saveSettings()">
         <span style="font-size:13px; color:var(--text-sub)">円</span>
       </div>
       <div class="config-row" style="margin-bottom:0;">
         <span class="config-label">1pt → スマホ</span>
-        <input type="number" class="config-input" x-model.number="exchangeRates.phone" min="1" @change="saveSettings()">
+        <input type="number" class="config-input" x-model.number="exchangeRates.phone" min="0.1" step="0.1" @change="saveSettings()">
         <span style="font-size:13px; color:var(--text-sub)">分</span>
       </div>
     </div>
