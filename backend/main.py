@@ -212,6 +212,16 @@ async def _cleanup_loop():
         await asyncio.sleep(24 * 60 * 60)  # 24時間
 
 
+def _is_bonus_disabled() -> bool:
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        s = db.query(Setting).get("bonus_disabled")
+        return bool(s and s.value == "1")
+    finally:
+        db.close()
+
+
 async def _bonus_scheduler_loop():
     """毎日6:30/18:00にLINEボーナス通知、21:50に振り返りを送信"""
     from .line_bot import broadcast_line_message
@@ -221,6 +231,11 @@ async def _bonus_scheduler_loop():
         try:
             now = now_jst()
             key_prefix = str(now.date())
+
+            if _is_bonus_disabled():
+                sent_today = {k for k in sent_today if k.startswith(key_prefix)}
+                await asyncio.sleep(30)
+                continue
 
             if now.hour == 6 and now.minute == 30 and f"{key_prefix}-6:30" not in sent_today:
                 sent_today.add(f"{key_prefix}-6:30")

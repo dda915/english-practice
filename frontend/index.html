@@ -510,7 +510,7 @@
     <div style="font-size:48px; margin-bottom:8px;">🎉🔥</div>
     <div style="font-size:20px; font-weight:800; color:#e65100; margin-bottom:8px;">ボーナスタイム！</div>
     <div style="font-size:15px; color:#bf360c; line-height:1.6; margin-bottom:16px;">
-      1問クリアで <strong x-text="bonusCard?.points + 'ポイント'" style="font-size:22px; color:#e65100;"></strong>！<br>
+      1問クリアで <strong x-text="fmtPt(bonusCard?.points) + 'ポイント'" style="font-size:22px; color:#e65100;"></strong>！<br>
       <span style="font-size:13px;" x-text="bonusCard?.remaining + '分以内にクリアしよう！'"></span>
     </div>
     <button class="btn btn-primary" style="width:100%; padding:14px; font-size:16px; font-weight:700; background:#e65100;"
@@ -577,11 +577,11 @@
     </div>
     <div class="ss-line ss-earned" x-show="summaryEarned > 0">
       <span>🪙 獲得ポイント</span>
-      <strong x-text="'+' + summaryEarned + ' pt'"></strong>
+      <strong x-text="'+' + fmtPt(summaryEarned) + ' pt'"></strong>
     </div>
     <div class="ss-line">
       <span>💰 累計ポイント</span>
-      <strong x-text="pointBalance + ' pt'"></strong>
+      <strong x-text="fmtPt(pointBalance) + ' pt'"></strong>
     </div>
 
     <div style="margin-top:20px;">
@@ -634,7 +634,7 @@
                 (○<span x-text="h.correct_so_far"></span>/×<span x-text="h.wrong_so_far"></span>)
               </span>
               <span x-show="h.cleared_by_this" style="background:var(--gold-bg); color:var(--gold); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">
-                ✨ クリア +<span x-text="h.points_earned"></span>pt
+                ✨ クリア +<span x-text="fmtPt(h.points_earned)"></span>pt
               </span>
             </div>
           </template>
@@ -749,7 +749,7 @@
         </template>
       </select>
       <div class="nav-points">
-        <span>&#x1FA99;</span> <span x-text="pointBalance + ' pt'"></span>
+        <span>&#x1FA99;</span> <span x-text="fmtPt(pointBalance) + ' pt'"></span>
       </div>
     </div>
   </div>
@@ -793,7 +793,7 @@
           <div class="summary-name" x-text="c.name"></div>
           <div class="summary-stats">
             &#x30AF;&#x30EA;&#x30A2;: <strong x-text="summaryData[c.id]?.cleared || 0"></strong> / <span x-text="questions.length"></span><br>
-            &#x30DD;&#x30A4;&#x30F3;&#x30C8;: <strong style="color:var(--gold);" x-text="summaryData[c.id]?.points || 0"></strong> pt
+            &#x30DD;&#x30A4;&#x30F3;&#x30C8;: <strong style="color:var(--gold);" x-text="fmtPt(summaryData[c.id]?.points || 0)"></strong> pt
           </div>
           <div style="margin-top:8px;">
             <div class="progress-track">
@@ -819,7 +819,7 @@
       </div>
       <div class="stat-item gold">
         <div class="stat-label">&#x30DD;&#x30A4;&#x30F3;&#x30C8;&#x6B8B;&#x9AD8;</div>
-        <div class="stat-value gold" x-text="pointBalance"></div>
+        <div class="stat-value gold" x-text="fmtPt(pointBalance)"></div>
       </div>
     </div>
 
@@ -1109,7 +1109,7 @@
                 <div class="history-dots">
                   <template x-for="(h, i) in q.history" :key="'dot'+q.question_id+'_'+i">
                     <div class="history-dot" :class="h.correct ? 'badge-correct' : 'badge-wrong'"
-                      :title="formatDateTime(h.date) + (h.cleared_by_this ? ' ✨+' + h.points_earned + 'pt' : '')"
+                      :title="formatDateTime(h.date) + (h.cleared_by_this ? ' ✨+' + fmtPt(h.points_earned) + 'pt' : '')"
                       x-text="h.correct ? '&#x25CB;' : '&#xD7;'"></div>
                   </template>
                 </div>
@@ -1131,11 +1131,11 @@
     <div class="point-balance-card">
       <div class="point-balance-label" x-text="currentChildName + ' のポイント残高'"></div>
       <div>
-        <span class="point-balance-value" x-text="pointBalance"></span>
+        <span class="point-balance-value" x-text="fmtPt(pointBalance)"></span>
         <span class="point-balance-unit">pt</span>
       </div>
       <div x-show="pendingPointsTotal > 0" style="font-size:12px; color:var(--gold); margin-top:4px;">
-        （うち申請中: <span x-text="pendingPointsTotal"></span>pt / 使用可能: <span x-text="availablePoints"></span>pt）
+        （うち申請中: <span x-text="fmtPt(pendingPointsTotal)"></span>pt / 使用可能: <span x-text="fmtPt(availablePoints)"></span>pt）
       </div>
     </div>
 
@@ -1175,7 +1175,7 @@
           <div style="font-size:13px; padding:6px 0; border-bottom:1px solid var(--gold-border);">
             <span x-text="r.date"></span> —
             <span x-text="r.type === 'money' ? 'お金 ' + r.converted_value + '円' : 'スマホ ' + r.converted_value + '分'"></span>
-            <span style="color:var(--text-sub);">（<span x-text="r.points"></span>pt）</span>
+            <span style="color:var(--text-sub);">（<span x-text="fmtPt(r.points)"></span>pt）</span>
           </div>
         </template>
       </div>
@@ -1196,7 +1196,7 @@
             <div class="point-log-date" x-text="log.date"></div>
           </div>
           <div class="point-log-amount" :class="log.amount > 0 ? 'earn' : 'spend'"
-            x-text="(log.amount > 0 ? '+' : '') + log.amount + ' pt'"></div>
+            x-text="(log.amount > 0 ? '+' : '') + fmtPt(log.amount) + ' pt'"></div>
         </div>
       </template>
     </div>
@@ -1258,7 +1258,7 @@
               <span x-show="ev.correct" style="color:var(--correct); font-weight:700;">○ 正解</span>
               <span x-show="!ev.correct" style="color:var(--wrong); font-weight:700;">× 不正解</span>
               <template x-if="ev.cleared">
-                <span style="color:var(--gold); font-weight:600;"> → クリア! +<span x-text="ev.points_earned"></span>pt</span>
+                <span style="color:var(--gold); font-weight:600;"> → クリア! +<span x-text="fmtPt(ev.points_earned)"></span>pt</span>
               </template>
             </div>
             <div style="font-size:11px; color:var(--text-sub);" x-text="formatDateTime(ev.time)"></div>
@@ -1280,7 +1280,7 @@
             <strong x-text="r.child_name"></strong>
             <span x-text="r.date"></span> —
             <span x-text="r.type === 'money' ? 'お金 ' + r.converted_value + '円' : 'スマホ ' + r.converted_value + '分'"></span>
-            <span style="color:var(--text-sub);">（<span x-text="r.points"></span>pt）</span>
+            <span style="color:var(--text-sub);">（<span x-text="fmtPt(r.points)"></span>pt）</span>
           </div>
         </div>
       </template>
@@ -1448,16 +1448,24 @@
     <div class="card" style="margin-bottom:24px;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
         <div style="font-size:13px; font-weight:600; color:var(--text-sub);">ボーナスタイム</div>
-        <button class="btn btn-outline btn-sm" @click="loadBonusStatus()">更新</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-sm" @click="toggleBonus()"
+                  :style="bonusStatus.disabled ? 'background:#43a047; color:#fff;' : 'background:#c62828; color:#fff;'"
+                  x-text="bonusStatus.disabled ? '再開' : '停止'"></button>
+          <button class="btn btn-outline btn-sm" @click="loadBonusStatus()">更新</button>
+        </div>
+      </div>
+      <div x-show="bonusStatus.disabled" style="padding:8px 12px; background:#fff3e0; border:1px solid #ff9800; border-radius:6px; margin-bottom:12px; font-size:13px; color:#e65100;">
+        ⏸ ボーナスタイム停止中（ポイント加算・LINE配信ともに無効）
       </div>
       <div style="padding:12px; border-radius:8px; margin-bottom:12px;"
-           :style="bonusStatus.is_bonus ? 'background:#fff3e0; border:1px solid #ff9800;' : 'background:var(--card-bg); border:1px solid var(--border-light);'">
+           :style="bonusStatus.disabled ? 'background:#f5f5f5; border:1px solid var(--border-light); opacity:0.5;' : (bonusStatus.is_bonus ? 'background:#fff3e0; border:1px solid #ff9800;' : 'background:var(--card-bg); border:1px solid var(--border-light);')">
         <div style="font-size:16px; font-weight:700; margin-bottom:4px;">
           <span x-show="bonusStatus.is_bonus" style="color:#e65100;">&#x1F525; ボーナス中!</span>
           <span x-show="!bonusStatus.is_bonus" style="color:var(--text-sub);">通常モード</span>
         </div>
         <div style="font-size:13px; color:var(--text-sub);">
-          現在のクリアポイント: <strong x-text="bonusStatus.points + 'pt'"></strong>
+          現在のクリアポイント: <strong x-text="fmtPt(bonusStatus.points) + 'pt'"></strong>
           <span x-show="bonusStatus.reason === 'guerrilla'" style="color:#e65100; font-size:12px;">（ゲリラ）</span>
           <span x-show="bonusStatus.reason === 'scheduled'" style="color:#e65100; font-size:12px;">（定期）</span>
         </div>
@@ -1475,7 +1483,7 @@
         <button class="btn btn-primary btn-sm" @click="startGuerrilla()" style="background:#e65100;">&#x1F389; ゲリラボーナス開始</button>
       </div>
       <div style="font-size:12px; color:var(--text-sub);">
-        通常: <span x-text="bonusStatus.normal_points"></span>pt / ボーナス: <span x-text="bonusStatus.bonus_points"></span>pt<br>
+        通常: <span x-text="fmtPt(bonusStatus.normal_points)"></span>pt / ボーナス: <span x-text="fmtPt(bonusStatus.bonus_points)"></span>pt<br>
         ボーナス時間帯: 6:30-6:45, 18:00-18:15<br>
         対象子供ID: <span x-text="JSON.stringify(bonusStatus.bonus_child_ids || [])"></span>
       </div>
@@ -1569,7 +1577,7 @@ function app() {
     parentDevices: [],
     showRegisterDialog: false,
     registerDeviceName: '',
-    bonusStatus: { is_bonus: false, points: 2, reason: '', guerrilla_until: null, guerrilla_points: null, normal_points: 2, bonus_points: 8, bonus_child_ids: [] },
+    bonusStatus: { is_bonus: false, points: 2, reason: '', guerrilla_until: null, guerrilla_points: null, normal_points: 2, bonus_points: 8, bonus_child_ids: [], disabled: false },
     guerrillaMinutes: 15,
     guerrillaPoints: 8,
     bonusCard: null,
@@ -1789,6 +1797,10 @@ function app() {
       return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
     },
 
+    fmtPt(n) {
+      return String(Math.round((+n || 0) * 100) / 100);
+    },
+
     toggleParentMode() {
       if (this.parentMode) {
         this.parentMode = false;
@@ -1887,6 +1899,21 @@ function app() {
         this.bonusStatus = await this.api('/api/bonus/status');
       } catch (e) {
         console.error('bonus status load error', e);
+      }
+    },
+
+    async toggleBonus() {
+      const willDisable = !this.bonusStatus.disabled;
+      const msg = willDisable
+        ? 'ボーナスタイムを停止しますか？\nポイント加算（朝6:30/夕18:00）と全LINE配信（朝/夕の告知・夜の振り返り）が停止します。'
+        : 'ボーナスタイムを再開しますか？\nポイント加算とLINE配信が再び有効になります。';
+      if (!confirm(msg)) return;
+      try {
+        const r = await this.api('/api/bonus/toggle', { method: 'POST' });
+        this.showToast(r.disabled ? 'ボーナスタイムを停止しました' : 'ボーナスタイムを再開しました');
+        await this.loadBonusStatus();
+      } catch (e) {
+        alert('エラー: ' + e.message);
       }
     },
 
@@ -2340,7 +2367,7 @@ function app() {
         g.feedback = 'accept';
         if (res.points_earned > 0) {
           this.summaryEarned += res.points_earned;
-          this.showToast(`+${res.points_earned}pt クリア！`);
+          this.showToast(`+${this.fmtPt(res.points_earned)}pt クリア！`);
         }
         await this.advanceResult();
       } catch (e) {
@@ -2381,7 +2408,7 @@ function app() {
         g.status = res.status;
         if (action === 'accept' && res.points_earned > 0) {
           this.summaryEarned += res.points_earned;
-          this.showToast(`+${res.points_earned}pt クリア！`);
+          this.showToast(`+${this.fmtPt(res.points_earned)}pt クリア！`);
         }
         if (action === 'escalate') {
           this.showToast('お父さんに連絡しました');
@@ -2485,7 +2512,7 @@ function app() {
 
         if (result.points_earned > 0) {
           const nums = result.newly_cleared.map(q => '問' + q.number).join(', ');
-          this.showToast('+' + result.points_earned + ' pt！ ' + nums + ' クリア');
+          this.showToast('+' + this.fmtPt(result.points_earned) + ' pt！ ' + nums + ' クリア');
         }
 
         alert(this.currentChildName + ': ' + result.correct + '/' + result.total + ' 正解' +

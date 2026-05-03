@@ -287,7 +287,7 @@ def submit_feedback(grading_id: int, body: FeedbackBody, db: Session = Depends(g
             child = db.query(Child).get(batch.child_id)
             q = db.query(Question).get(g.question_id)
             mark = "○" if g.ai_correct else "×"
-            extra = f" (+{earned}pt クリア!)" if newly else ""
+            extra = f" (+{earned:g}pt クリア!)" if newly else ""
             if child:
                 send_activity(child.name, f"納得して確定 {mark}{extra}", f"問{q.number if q else '?'}: {q.japanese if q else ''}")
         except Exception:
@@ -469,7 +469,7 @@ def resolve_grading(grading_id: int, body: ResolveBody, db: Session = Depends(ge
             child = db.query(Child).get(batch.child_id)
             q = db.query(Question).get(g.question_id)
             mark = "○" if g.ai_correct else "×"
-            extra = f" (+{earned}pt クリア!)" if newly else ""
+            extra = f" (+{earned:g}pt クリア!)" if newly else ""
             if child:
                 send_activity(child.name, f"チャット後に納得して確定 {mark}{extra}", f"問{q.number if q else '?'}: {q.japanese if q else ''}")
         except Exception:
@@ -645,7 +645,7 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
         mark = "○ 正解" if body.final_correct else "× 不正解"
         notify_child(batch.child_id, {
             "title": f"お父さんからの返事: {mark}",
-            "body": (q.japanese if q else "") + (f" (+{earned}pt)" if earned else ""),
+            "body": (q.japanese if q else "") + (f" (+{earned:g}pt)" if earned else ""),
             "url": "/",
         })
     except Exception as e:
@@ -656,7 +656,7 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
         q = db.query(Question).get(g.question_id)
         child = db.query(Child).get(batch.child_id)
         mark = "○" if body.final_correct else "×"
-        extra = f" (+{earned}pt クリア!)" if earned else ""
+        extra = f" (+{earned:g}pt クリア!)" if earned else ""
         comment_line = f"\nコメント: {body.comment}" if body.comment else ""
         detail = (
             f"問{q.number if q else '?'}: {q.japanese if q else ''}\n"
@@ -821,7 +821,8 @@ async function submit(correct) {{
     }});
     if (!res.ok) throw new Error((await res.json()).detail || 'Error');
     const data = await res.json();
-    msg.textContent = '✅ 確定しました' + (data.points_earned > 0 ? ` (+${{data.points_earned}}pt)` : '');
+    const fmtPt = n => String(Math.round((+n || 0) * 100) / 100);
+    msg.textContent = '✅ 確定しました' + (data.points_earned > 0 ? ` (+${{fmtPt(data.points_earned)}}pt)` : '');
     msg.style.color = '#2e7d32';
   }} catch (e) {{
     msg.textContent = '❌ ' + e.message;

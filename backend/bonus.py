@@ -20,6 +20,9 @@ def is_bonus_time(db: Session, child_id: int) -> tuple[bool, int, str]:
     normal_points = float(_get_setting(db, "points_per_clear", "2"))
     bonus_points = float(_get_setting(db, "bonus_points", "8"))
 
+    if _get_setting(db, "bonus_disabled", "0") == "1":
+        return False, normal_points, ""
+
     # ボーナス対象の子供IDリスト
     try:
         bonus_child_ids = json.loads(_get_setting(db, "bonus_child_ids", "[]"))

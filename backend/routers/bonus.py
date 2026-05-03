@@ -47,6 +47,8 @@ def bonus_status(db: Session = Depends(get_db)):
     normal_points = float(_get_setting(db, "points_per_clear", "2"))
     bonus_points = float(_get_setting(db, "bonus_points", "8"))
 
+    disabled = _get_setting(db, "bonus_disabled", "0") == "1"
+
     return {
         "is_bonus": _is_bonus,
         "points": points,
@@ -56,7 +58,18 @@ def bonus_status(db: Session = Depends(get_db)):
         "normal_points": normal_points,
         "bonus_points": bonus_points,
         "bonus_child_ids": bonus_child_ids,
+        "disabled": disabled,
     }
+
+
+@router.post("/api/bonus/toggle")
+def toggle_bonus(db: Session = Depends(get_db)):
+    """ボーナスタイム（ポイント加算 + LINE配信）の停止/再開を切り替え"""
+    current = _get_setting(db, "bonus_disabled", "0")
+    new_value = "0" if current == "1" else "1"
+    _set_setting(db, "bonus_disabled", new_value)
+    db.commit()
+    return {"disabled": new_value == "1"}
 
 
 @router.post("/api/bonus/guerrilla")

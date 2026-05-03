@@ -119,7 +119,7 @@ def _generate_review_message(stats: dict) -> str:
 優しく声をかけるLINEメッセージを作ってください。
 
 情報:
-- 累計ポイント: {stats['total_points']}pt
+- 累計ポイント: {stats['total_points']:g}pt
 - 明日の朝6:30からボーナスタイム（8ポイント）がある
 
 ルール:
@@ -142,8 +142,8 @@ def _generate_review_message(stats: dict) -> str:
 - 解答数: {stats['total_answers']}問（正解{stats['correct']}、不正解{stats['wrong']}）
 - 新しくクリアした問題: {len(stats['cleared_questions'])}問
 {cleared_list if cleared_list else '  （なし）'}
-- 今日の獲得ポイント: {stats['earned_points']}pt
-- 累計ポイント: {stats['total_points']}pt
+- 今日の獲得ポイント: {stats['earned_points']:g}pt
+- 累計ポイント: {stats['total_points']:g}pt
 - 連続学習日数: {stats['streak']}日
 
 ルール:
@@ -171,7 +171,7 @@ def _generate_review_message(stats: dict) -> str:
             return f"今日はお休みだったね。明日の朝6:30からボーナスタイムだよ！💪"
         return (
             f"今日は{stats['total_answers']}問チャレンジして"
-            f"{stats['earned_points']}ptゲットしたね！"
+            f"{stats['earned_points']:g}ptゲットしたね！"
             f"明日もボーナスタイム狙おう！🌟"
         )
 
