@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from ..database import get_db
+from ..database import get_db, now_jst
 from ..models import PointLog, Child, Setting, ExchangeRequest
 from ..mail import send_exchange_notification
 from ..backup import backup_to_dropbox
@@ -95,19 +95,28 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
     else:
         raise HTTPException(400, "typeは 'money' または 'phone' にしてください")
 
-    # 申請だけ作成（ポイントはまだ減らさない）
+    # 自動交換: 申請と同時にポイント減算 + fulfilled=True
+    desc = f"{type_label}に交換（{converted}{unit}）"
     req = ExchangeRequest(
         child_id=child_id,
         requested_date=date.today(),
         exchange_type=body.type,
         points=body.amount,
         converted_value=converted,
-        fulfilled=False,
+        fulfilled=True,
+        fulfilled_at=now_jst(),
     )
     db.add(req)
+    db.add(PointLog(
+        child_id=child_id,
+        logged_date=date.today(),
+        amount=-body.amount,
+        description=desc,
+    ))
     db.commit()
+    backup_to_dropbox()
 
-    # メール通知
+    # メール通知（承認不要・通知のみ）
     send_exchange_notification(
         child_name=child.name,
         type_label=type_label,
@@ -118,7 +127,7 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
         request_id=req.id,
     )
 
-    return {"ok": True, "description": f"{type_label}に交換申請（{converted}{unit}）"}
+    return {"ok": True, "description": desc}
 
 
 @router.get("/exchange-requests")

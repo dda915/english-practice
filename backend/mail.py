@@ -10,30 +10,26 @@ SITE_URL = "https://english-practice-5285.onrender.com"
 
 
 def send_exchange_notification(child_name: str, type_label: str, converted: int, unit: str, points: int, balance: int, request_id: int):
-    """交換リクエストのメール通知（HTML）"""
-    fulfill_url = f"{SITE_URL}/api/children/exchange-requests/{request_id}/fulfill?from=email"
-
+    """ポイント交換完了の通知メール（自動交換済み・承認不要）"""
     html = f"""\
 <div style="font-family:sans-serif; max-width:500px; margin:0 auto;">
-  <h2 style="color:#2d5a27;">{child_name} がポイント交換を申請しました</h2>
+  <h2 style="color:#2d5a27;">{child_name} がポイントを交換しました</h2>
   <table style="border-collapse:collapse; width:100%; margin:16px 0;">
     <tr><td style="padding:8px; border-bottom:1px solid #eee; color:#666;">交換内容</td>
         <td style="padding:8px; border-bottom:1px solid #eee; font-weight:bold;">{type_label} {converted}{unit}</td></tr>
     <tr><td style="padding:8px; border-bottom:1px solid #eee; color:#666;">使用ポイント</td>
-        <td style="padding:8px; border-bottom:1px solid #eee;">{points}pt</td></tr>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{points:g}pt</td></tr>
     <tr><td style="padding:8px; border-bottom:1px solid #eee; color:#666;">残高</td>
-        <td style="padding:8px; border-bottom:1px solid #eee;">{balance}pt</td></tr>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{balance:g}pt</td></tr>
   </table>
-  <div style="margin:24px 0;">
-    <a href="{fulfill_url}" style="display:inline-block; background:#2d5a27; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">対応済みにする</a>
-  </div>
+  <div style="margin-top:16px; font-size:12px; color:#888;">※ ポイントは自動的に減算済みです（承認不要）</div>
   <div style="margin-top:16px;">
     <a href="{SITE_URL}" style="color:#2d5a27;">サイトを開く</a>
   </div>
 </div>"""
 
     send_notification(
-        subject=f"🚨🚨【承認してください】{child_name} → {type_label} {converted}{unit} 🚨🚨",
+        subject=f"💰【交換完了】{child_name} → {type_label} {converted}{unit}",
         body=html,
         html=True,
     )

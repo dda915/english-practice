@@ -1150,7 +1150,7 @@
         </div>
         <div class="exchange-result" x-show="exchangeMoney > 0">&#x2192; <strong x-text="exchangeMoney * exchangeRates.money"></strong> &#x5186;</div>
         <button class="btn btn-gold btn-sm" @click="spendPoints('money', exchangeMoney)"
-          :disabled="!exchangeMoney || exchangeMoney <= 0 || exchangeMoney > availablePoints || loading">申請する</button>
+          :disabled="!exchangeMoney || exchangeMoney <= 0 || exchangeMoney > availablePoints || loading">交換する</button>
         <div x-show="exchangeMoney > availablePoints && exchangeMoney > 0" style="font-size:11px; color:var(--wrong); margin-top:6px;">ポイントが足りません</div>
       </div>
       <div class="exchange-card">
@@ -1163,7 +1163,7 @@
         </div>
         <div class="exchange-result" x-show="exchangePhone > 0">&#x2192; <strong x-text="exchangePhone * exchangeRates.phone"></strong> &#x5206;</div>
         <button class="btn btn-gold btn-sm" @click="spendPoints('phone', exchangePhone)"
-          :disabled="!exchangePhone || exchangePhone <= 0 || exchangePhone > availablePoints || loading">申請する</button>
+          :disabled="!exchangePhone || exchangePhone <= 0 || exchangePhone > availablePoints || loading">交換する</button>
         <div x-show="exchangePhone > availablePoints && exchangePhone > 0" style="font-size:11px; color:var(--wrong); margin-top:6px;">ポイントが足りません</div>
       </div>
     </div>
@@ -2542,7 +2542,7 @@ function app() {
           method: 'POST',
           body: JSON.stringify({ amount, type }),
         });
-        this.showToast('申請しました！パパに通知を送りました');
+        this.showToast('交換しました！パパに通知しました');
         if (type === 'money') this.exchangeMoney = null;
         else this.exchangePhone = null;
         await this.loadChildData();
