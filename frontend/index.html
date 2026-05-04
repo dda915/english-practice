@@ -9,6 +9,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}</script>
+<script>(function(){var d=new Date();var p=new URLSearchParams(location.search).get('kodomonohi');if((d.getMonth()===4&&d.getDate()===5)||p==='1')document.documentElement.classList.add('kodomonohi');})();</script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
@@ -474,6 +475,75 @@
   .pw-dialog .pw-buttons { display: flex; gap: 8px; margin-top: 16px; justify-content: center; }
   .pw-dialog .pw-buttons button { flex: 1; }
   .pw-error { color: #e53e3e; font-size: 12px; margin-top: 8px; }
+
+  /* ════════════════════════════════════════════════════════════════ */
+  /* === こどもの日テーマ (5/5限定 / モバイルのみ) === */
+  /* ════════════════════════════════════════════════════════════════ */
+  .koi-decoration { display: none; }
+  .koi-celebrate {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+    display: none;
+  }
+  .koi-celebrate.active { display: block; }
+  .koi-celebrate .koi-fly {
+    position: absolute;
+    bottom: -60px;
+    font-size: 32px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+    animation: koiFly 2.8s ease-out forwards;
+  }
+  @keyframes koiFly {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+    8%   { opacity: 1; }
+    100% { transform: translateY(-110vh) rotate(180deg); opacity: 0; }
+  }
+  @keyframes koiSway {
+    0%, 100% { transform: rotate(-10deg); }
+    50% { transform: rotate(10deg); }
+  }
+  @media (max-width: 640px) {
+    html.kodomonohi body { background: #e8f4fc; }
+    html.kodomonohi .mobile-header {
+      background: linear-gradient(180deg, #87ceeb 0%, #b3e0f5 60%, #d6ebf6 100%);
+      border-bottom-color: #b3dcf0;
+      padding: 50px 12px 8px;
+      overflow: hidden;
+    }
+    html.kodomonohi .koi-decoration {
+      display: flex;
+      position: absolute;
+      top: 6px; left: 0; right: 0;
+      height: 40px;
+      justify-content: space-around;
+      align-items: flex-start;
+      pointer-events: none;
+      padding: 0 24px;
+    }
+    html.kodomonohi .koi-decoration span {
+      font-size: 28px;
+      transform-origin: top center;
+      animation: koiSway 2.4s ease-in-out infinite;
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15));
+    }
+    html.kodomonohi .koi-decoration span:nth-child(1) { animation-delay: 0s; }
+    html.kodomonohi .koi-decoration span:nth-child(2) { animation-delay: -0.7s; font-size: 24px; }
+    html.kodomonohi .koi-decoration span:nth-child(3) { animation-delay: -1.4s; }
+    html.kodomonohi .child-select {
+      background-color: #fef0ec;
+      color: #c0392b;
+      border-color: #c0392b;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c0392b'/%3E%3C/svg%3E");
+    }
+    html.kodomonohi .nav-tab.active {
+      background: #fef0ec;
+      color: #c0392b;
+      border-top-color: #c0392b;
+    }
+    html.kodomonohi .swipe-arrow { color: #c0392b; }
+  }
 </style>
 </head>
 <body x-data="app()" x-cloak x-init="init()">
@@ -699,8 +769,12 @@
   </div>
 </template>
 
+<!-- こどもの日: 鯉のぼり祝福コンテナ -->
+<div id="koiCelebrate" class="koi-celebrate" aria-hidden="true"></div>
+
 <!-- Mobile-only top header: 子供セレクタ + 鍵 -->
 <div class="mobile-header no-print">
+  <div class="koi-decoration" aria-hidden="true"><span>🎏</span><span>🎏</span><span>🎏</span></div>
   <template x-if="kidLocked">
     <span style="font-weight:600; font-size:14px;" x-text="children[0]?.name"></span>
   </template>
@@ -2338,6 +2412,29 @@ function app() {
       }
     },
 
+    triggerKoiCelebration() {
+      if (!document.documentElement.classList.contains('kodomonohi')) return;
+      const wrap = document.getElementById('koiCelebrate');
+      if (!wrap) return;
+      wrap.classList.add('active');
+      const positions = [8, 28, 48, 70, 86];
+      const sizes = [30, 24, 32, 26, 28];
+      const delays = [0, 200, 400, 100, 300];
+      positions.forEach((pos, i) => {
+        const koi = document.createElement('span');
+        koi.className = 'koi-fly';
+        koi.textContent = '🎏';
+        koi.style.left = pos + '%';
+        koi.style.fontSize = sizes[i] + 'px';
+        koi.style.animationDelay = delays[i] + 'ms';
+        wrap.appendChild(koi);
+        setTimeout(() => koi.remove(), 3500);
+      });
+      setTimeout(() => {
+        if (wrap.children.length === 0) wrap.classList.remove('active');
+      }, 3600);
+    },
+
     async submitFeedback(feedback) {
       const g = this.gradings[this.resultIndex];
       if (!g) return;
@@ -2368,6 +2465,7 @@ function app() {
         if (res.points_earned > 0) {
           this.summaryEarned += res.points_earned;
           this.showToast(`+${this.fmtPt(res.points_earned)}pt クリア！`);
+          this.triggerKoiCelebration();
         }
         await this.advanceResult();
       } catch (e) {
@@ -2409,6 +2507,7 @@ function app() {
         if (action === 'accept' && res.points_earned > 0) {
           this.summaryEarned += res.points_earned;
           this.showToast(`+${this.fmtPt(res.points_earned)}pt クリア！`);
+          this.triggerKoiCelebration();
         }
         if (action === 'escalate') {
           this.showToast('お父さんに連絡しました');
