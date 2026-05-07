@@ -10,6 +10,9 @@ from .photos import PHOTO_DIR
 
 router = APIRouter(prefix="/api/children", tags=["children"])
 
+# ギャグ問題（日本語回答）専用の unit_number。get_batch は通常バッチの末尾に1問混入する。
+GAG_UNIT_NUMBER = 999.0
+
 
 class ChildUpdate(BaseModel):
     name: str
@@ -225,8 +228,12 @@ def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
 
     # 新規セッション作成
     questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
-    uncleared = [q for q in questions if q.id not in exclude]
-    batch = uncleared[:size]
+    uncleared_normal = [q for q in questions if q.id not in exclude and q.unit_number != GAG_UNIT_NUMBER]
+    uncleared_gag = [q for q in questions if q.id not in exclude and q.unit_number == GAG_UNIT_NUMBER]
+    batch = uncleared_normal[:size]
+    # ギャグ問題（日本語回答）が未クリアなら通常バッチの末尾に1問だけ混入
+    if uncleared_gag:
+        batch.append(uncleared_gag[0])
 
     if batch:
         qids = [q.id for q in batch]

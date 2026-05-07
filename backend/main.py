@@ -107,6 +107,37 @@ def _migrate_bonus_defaults():
         print(f"Migration warning (bonus defaults): {e}")
 
 
+# unit_number=999 をギャグ問題（日本語回答）専用枠として使う。
+# get_batch は通常10問の末尾にこの枠の未クリア問題を1問混入する。
+GAG_UNIT_NUMBER = 999.0
+GAG_QUESTIONS = [
+    (
+        1402,
+        "Aさんを殺そうとしたら誤ってBさんを殺してしまいました。何罪が成立しますか？",
+        "Bさんに対する殺人罪と、Aさんに対する殺人未遂罪が成立し、両者は観念的競合となる(法定的符合説・数故意犯説)",
+    ),
+]
+
+
+def _seed_gag_questions():
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        for num, jp, en in GAG_QUESTIONS:
+            row = conn.execute("SELECT id FROM questions WHERE number = ?", (num,)).fetchone()
+            if row:
+                continue
+            conn.execute(
+                "INSERT INTO questions (number, unit_number, japanese, english) VALUES (?, ?, ?, ?)",
+                (num, GAG_UNIT_NUMBER, jp, en),
+            )
+            print(f"[seed gag] 問{num} を追加しました")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Seed warning (gag questions): {e}")
+
+
 _migrate_unit_number()
 _migrate_grading_cols()
 _migrate_child_stage()
@@ -114,6 +145,7 @@ _migrate_child_access_code()
 _migrate_photo_batch_id()
 _migrate_bonus_defaults()
 Base.metadata.create_all(bind=engine)
+_seed_gag_questions()
 
 app = FastAPI(title="和文英訳トレーニング")
 

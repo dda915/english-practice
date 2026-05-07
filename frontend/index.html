@@ -544,9 +544,47 @@
     }
     html.kodomonohi .swipe-arrow { color: #c0392b; }
   }
+
+  /* ─── 法律ギャグ問題 (unit_number=999) 専用 ─── */
+  .law-bg-wrap { position: relative; overflow: hidden; }
+  .law-bg-wrap > .law-pattern {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 0;
+  }
+  .law-bg-wrap > *:not(.law-pattern) { position: relative; z-index: 1; }
+  .swipe-card.law-bg-wrap { background-color: #fffdf3; border-radius: 12px; }
+  .result-card.law-bg-wrap {
+    background-color: #fffdf3; border-radius: 12px;
+    padding: 16px 12px; border: 1px solid #e8d5a3;
+  }
+  .gag-note {
+    display: inline-block; margin-top: 20px; padding: 8px 16px;
+    font-size: 13px; font-weight: 600; color: #8b6f00;
+    background: #fff8dc; border: 1px solid #e8d5a3;
+    border-radius: 18px; line-height: 1.4;
+  }
+  .gag-note .pin { font-size: 14px; margin-right: 4px; }
 </style>
 </head>
 <body x-data="app()" x-cloak x-init="init()">
+
+<!-- 法律模様 SVG パターン (unit_number=999 のギャグ問題で使用) -->
+<svg width="0" height="0" style="position:absolute;" aria-hidden="true">
+  <defs>
+    <pattern id="lawpat" x="0" y="0" width="200" height="200" patternUnits="userSpaceOnUse">
+      <g fill="#8b6f00" opacity="0.11" font-family="'Source Serif 4', 'Yu Mincho', serif" font-weight="500">
+        <text x="20" y="42" font-size="30">&#x7F6A;</text>
+        <text x="155" y="34" font-size="26">&#x5211;</text>
+        <text x="92" y="118" font-size="56" text-anchor="middle">&#x2696;</text>
+        <text x="170" y="170" font-size="32">&#x6CD5;</text>
+        <text x="22" y="180" font-size="24">&#x5224;</text>
+        <text x="155" y="100" font-size="20">&#x8A34;</text>
+        <text x="40" y="100" font-size="18">&#x6761;</text>
+        <text x="100" y="190" font-size="22">&#x88C1;</text>
+      </g>
+    </pattern>
+  </defs>
+</svg>
 
 <!-- Password dialog -->
 <div class="pw-overlay" x-show="showPwDialog" x-cloak @keydown.escape.window="showPwDialog = false">
@@ -930,7 +968,8 @@
           結果 <span x-text="resultIndex + 1"></span> / <span x-text="gradings.length"></span>
         </div>
         <template x-for="(g, i) in gradings" :key="'gr'+g.id">
-          <div class="result-card" x-show="resultIndex === i">
+          <div class="result-card" :class="{ 'law-bg-wrap': g.unit_number == 999 }" x-show="resultIndex === i">
+            <svg x-show="g.unit_number == 999" class="law-pattern" preserveAspectRatio="xMidYMid slice"><rect width="100%" height="100%" fill="url(#lawpat)"/></svg>
             <div class="result-head">
               <span class="result-qnum">&#x5358;&#x5143;<span x-text="g.unit_number"></span> / &#x554F;<span x-text="g.number"></span></span>
               <span class="result-mark" :class="g.ai_correct ? 'ok' : 'ng'" x-text="g.ai_correct ? '○' : '×'"></span>
@@ -1002,9 +1041,13 @@
 
         <!-- 問題カード -->
         <template x-for="(q, i) in currentBatch" :key="'sc'+q.id">
-          <div class="swipe-card" x-show="cardIndex === i">
+          <div class="swipe-card" :class="{ 'law-bg-wrap': q.unit_number == 999 }" x-show="cardIndex === i">
+            <svg x-show="q.unit_number == 999" class="law-pattern" preserveAspectRatio="xMidYMid slice"><rect width="100%" height="100%" fill="url(#lawpat)"/></svg>
             <div class="swipe-qnum">&#x5358;&#x5143;<span x-text="q.unit_number"></span> / &#x554F;<span x-text="q.number"></span></div>
             <div class="swipe-qjp" x-text="q.japanese"></div>
+            <div class="gag-note" x-show="q.unit_number == 999">
+              <span class="pin">&#x1F4CC;</span>英語ではなく日本語で答えてね
+            </div>
           </div>
         </template>
 
