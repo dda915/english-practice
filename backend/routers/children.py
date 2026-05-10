@@ -413,6 +413,10 @@ def clear_session(child_id: int, db: Session = Depends(get_db)):
 # ─── ラウンド管理 ───
 
 
+class SetRoundBody(BaseModel):
+    round: int
+
+
 @router.post("/{child_id}/new-round")
 def start_new_round(child_id: int, db: Session = Depends(get_db)):
     """復習開始: ラウンドを1つ進める（全問が未クリア状態に戻る）"""
@@ -421,6 +425,22 @@ def start_new_round(child_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "子供が見つかりません")
     child.round = (child.round or 1) + 1
     # 進行中のセッションがあれば削除
+    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    if session:
+        db.delete(session)
+    db.commit()
+    return {"id": child.id, "name": child.name, "round": child.round}
+
+
+@router.put("/{child_id}/round")
+def set_round(child_id: int, body: SetRoundBody, db: Session = Depends(get_db)):
+    """ラウンドを直接指定（管理用）"""
+    child = db.query(Child).get(child_id)
+    if not child:
+        raise HTTPException(404, "子供が見つかりません")
+    if body.round < 1:
+        raise HTTPException(400, "ラウンドは1以上")
+    child.round = body.round
     session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
     if session:
         db.delete(session)
