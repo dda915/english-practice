@@ -108,11 +108,32 @@ def _ensure_photo_batch_id():
         print(f"Migration in seed (photo batch_id): {e}")
 
 
+def _ensure_round_columns():
+    """ラウンド制: children.round と answers.round カラムがなければ追加"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "children" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+            if "round" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN round INTEGER NOT NULL DEFAULT 1")
+        if "answers" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(answers)")]
+            if "round" not in cols:
+                conn.execute("ALTER TABLE answers ADD COLUMN round INTEGER NOT NULL DEFAULT 1")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration in seed (round): {e}")
+
+
 def seed():
     _ensure_unit_number_column()
     _ensure_stage_column()
     _ensure_access_code_column()
     _ensure_photo_batch_id()
+    _ensure_round_columns()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
