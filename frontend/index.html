@@ -1533,6 +1533,34 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント手動調整</div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div class="config-row">
+          <span class="config-label">対象</span>
+          <select x-model.number="adjustChildId" style="font-size:13px; padding:4px 8px; border:1px solid var(--border-light); border-radius:6px; flex:1;">
+            <template x-for="c in children" :key="'adj'+c.id">
+              <option :value="c.id" x-text="c.name"></option>
+            </template>
+          </select>
+        </div>
+        <div class="config-row">
+          <span class="config-label">ポイント</span>
+          <input type="number" class="config-input" x-model.number="adjustAmount" placeholder="例: 5 or -3" style="width:100px;">
+          <span style="font-size:13px; color:var(--text-sub)">pt</span>
+        </div>
+        <div class="config-row">
+          <span class="config-label">理由</span>
+          <input type="text" x-model="adjustDescription" placeholder="例: お手伝いボーナス"
+            style="flex:1; font-size:13px; padding:6px 10px; border:1px solid var(--border-light); border-radius:6px;">
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-primary btn-sm" @click="adjustPoints()"
+            :disabled="!adjustAmount || !adjustDescription.trim()">適用</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
       <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">名前の変更</div>
       <template x-for="c in children" :key="'name'+c.id">
         <div class="config-row">
@@ -1676,6 +1704,9 @@ function app() {
     pendingRequests: [],
     exchangeMoney: null,
     exchangePhone: null,
+    adjustChildId: null,
+    adjustAmount: null,
+    adjustDescription: '',
     toasts: [],
     progress: [],
     pointBalance: 0,
@@ -1795,6 +1826,9 @@ function app() {
 
     async loadChildren() {
       this.children = await this.api('/api/children');
+      if (this.children.length > 0 && !this.adjustChildId) {
+        this.adjustChildId = this.children[0].id;
+      }
     },
 
     async loadSettings() {
@@ -2712,6 +2746,25 @@ function app() {
       await this.api(`/api/children/exchange-requests/${reqId}/fulfill`, { method: 'PUT' });
       await this.loadChildData();
       this.showToast('対応済みにしました');
+    },
+
+    async adjustPoints() {
+      if (!this.adjustAmount || !this.adjustDescription.trim()) return;
+      const targetId = this.adjustChildId || this.currentChildId;
+      try {
+        await this.api(`/api/children/${targetId}/points/adjust`, {
+          method: 'POST',
+          body: JSON.stringify({ amount: this.adjustAmount, description: this.adjustDescription.trim() }),
+        });
+        const sign = this.adjustAmount > 0 ? '+' : '';
+        this.showToast(`${sign}${this.adjustAmount}pt を適用しました`);
+        this.adjustAmount = null;
+        this.adjustDescription = '';
+        await this.loadChildData();
+        await this.loadAllSummaries();
+      } catch (e) {
+        alert(e.message);
+      }
     },
 
     async saveSettings() {

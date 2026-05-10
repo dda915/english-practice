@@ -17,6 +17,11 @@ class SpendRequest(BaseModel):
     type: str  # "money" or "phone"
 
 
+class AdjustRequest(BaseModel):
+    amount: float  # positive to add, negative to subtract
+    description: str
+
+
 def _get_balance(db: Session, child_id: int) -> float:
     logs = db.query(PointLog).filter(PointLog.child_id == child_id).all()
     return sum(l.amount for l in logs)
@@ -128,6 +133,32 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
     )
 
     return {"ok": True, "description": desc}
+
+
+@router.post("/{child_id}/points/adjust")
+def adjust_points(child_id: int, body: AdjustRequest, db: Session = Depends(get_db)):
+    """管理者がポイントを手動で加減する"""
+    child = db.query(Child).get(child_id)
+    if not child:
+        raise HTTPException(404, "子供が見つかりません")
+
+    if body.amount == 0:
+        raise HTTPException(400, "ポイント数は0以外にしてください")
+
+    if not body.description.strip():
+        raise HTTPException(400, "理由を入力してください")
+
+    db.add(PointLog(
+        child_id=child_id,
+        logged_date=date.today(),
+        amount=body.amount,
+        description=body.description.strip(),
+    ))
+    db.commit()
+    backup_to_dropbox()
+
+    balance = _get_balance(db, child_id)
+    return {"ok": True, "new_balance": balance}
 
 
 @router.get("/exchange-requests")
