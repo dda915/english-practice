@@ -51,21 +51,25 @@ def update_question(number: int, body: QuestionPatch, db: Session = Depends(get_
 
 
 @router.delete("/{number}")
-def delete_question(number: int, db: Session = Depends(get_db)):
-    from ..models import Answer, Grading, Message
+def delete_question(number: int, force: bool = False, db: Session = Depends(get_db)):
+    from ..models import Answer, Grading, ChatMessage, Message
     q = db.query(Question).filter(Question.number == number).first()
     if not q:
         raise HTTPException(404, f"問題番号 {number} が見つかりません")
-    # 関連レコードがあれば削除を拒否
     has_answers = db.query(Answer).filter(Answer.question_id == q.id).first()
     has_gradings = db.query(Grading).filter(Grading.question_id == q.id).first()
-    if has_answers or has_gradings:
-        raise HTTPException(400, f"問題番号 {number} には解答/採点データがあるため削除できません")
-    # 紐づきメッセージがあれば question_id を外す
+    if (has_answers or has_gradings) and not force:
+        raise HTTPException(400, f"問題番号 {number} には解答/採点データがあるため削除できません（?force=true で強制削除可）")
+    # 強制削除: 関連データをカスケード削除
+    gradings = db.query(Grading).filter(Grading.question_id == q.id).all()
+    for g in gradings:
+        db.query(ChatMessage).filter(ChatMessage.grading_id == g.id).delete()
+    db.query(Grading).filter(Grading.question_id == q.id).delete()
+    db.query(Answer).filter(Answer.question_id == q.id).delete()
     db.query(Message).filter(Message.question_id == q.id).update({Message.question_id: None})
     db.delete(q)
     db.commit()
-    return {"deleted": number}
+    return {"deleted": number, "force": force}
 
 
 @router.get("")
