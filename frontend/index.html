@@ -1571,21 +1571,18 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ステージ設定</div>
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">復習（ラウンド管理）</div>
       <div style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">
-        ステージN = 各問題をN回クリアしないと完了にならない（忘却曲線対策）
+        「復習開始」で全問が未クリアに戻り、もう一度最初から解き直せます。過去の解答履歴は残ります。
       </div>
-      <template x-for="c in children" :key="'stage'+c.id">
-        <div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-light); font-size:14px;">
-          <strong x-text="c.name" style="min-width:60px;"></strong>
-          <span style="color:var(--text-sub);">ステージ</span>
-          <select :value="c.stage || 1" @change="updateStage(c.id, parseInt($event.target.value))"
-                  style="font-size:14px; padding:4px 8px; border:1px solid var(--border-light); border-radius:6px; min-width:60px;">
-            <template x-for="n in [1,2,3,4,5]" :key="'s'+n">
-              <option :value="n" x-text="n" :selected="n === (c.stage || 1)"></option>
-            </template>
-          </select>
-          <span style="font-size:12px; color:var(--text-sub);" x-text="'（クリア条件: 正解 > 不正解+' + ((c.stage || 1) - 1) + '）'"></span>
+      <template x-for="c in children" :key="'round'+c.id">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-light); font-size:14px;">
+          <div>
+            <strong x-text="c.name"></strong>
+            <span style="font-size:12px; color:var(--text-sub); margin-left:8px;">ラウンド <span x-text="c.round || 1"></span></span>
+          </div>
+          <button class="btn btn-outline btn-sm" @click="startNewRound(c.id, c.name)"
+                  style="color:var(--accent); border-color:var(--accent);">復習開始</button>
         </div>
       </template>
     </div>
@@ -2346,19 +2343,17 @@ function app() {
       }
     },
 
-    async updateStage(childId, newStage) {
+    async startNewRound(childId, childName) {
+      if (!confirm(`${childName} の復習を開始しますか？\n全問が未クリアに戻り、ラウンドが1つ進みます。\n（過去の解答履歴はそのまま残ります）`)) return;
       try {
-        const result = await this.api(`/api/children/${childId}/stage`, {
-          method: 'PUT',
-          body: JSON.stringify({ stage: newStage }),
-        });
+        const result = await this.api(`/api/children/${childId}/new-round`, { method: 'POST' });
         const c = this.children.find(c => c.id === childId);
-        if (c) c.stage = result.stage;
-        this.showToast(`${result.name} をステージ${result.stage}に変更しました`);
-        // 進捗を再読み込み（クリア判定が変わるため）
-        await this.loadProgress();
+        if (c) c.round = result.round;
+        this.showToast(`${result.name} のラウンド${result.round}を開始しました`);
+        await this.loadChildData();
+        await this.loadAllSummaries();
       } catch (e) {
-        this.showToast('ステージ変更に失敗しました');
+        this.showToast('復習開始に失敗しました');
       }
     },
 

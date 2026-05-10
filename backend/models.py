@@ -20,7 +20,8 @@ class Child(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(Text, nullable=False)
-    stage = Column(Integer, nullable=False, default=1)
+    stage = Column(Integer, nullable=False, default=1)  # deprecated, use round
+    round = Column(Integer, nullable=False, default=1)
     access_code = Column(Text, nullable=True, unique=True)
 
     answers = relationship("Answer", back_populates="child")
@@ -35,6 +36,7 @@ class Answer(Base):
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
     answered_date = Column(DateTime, nullable=False)
     correct = Column(Boolean, nullable=False)
+    round = Column(Integer, nullable=False, default=1)
 
     child = relationship("Child", back_populates="answers")
     question = relationship("Question", back_populates="answers")

@@ -21,7 +21,7 @@ class ChildUpdate(BaseModel):
 @router.get("")
 def list_children(db: Session = Depends(get_db)):
     children = db.query(Child).order_by(Child.id).all()
-    return [{"id": c.id, "name": c.name, "stage": c.stage or 1, "access_code": c.access_code} for c in children]
+    return [{"id": c.id, "name": c.name, "round": c.round or 1, "access_code": c.access_code} for c in children]
 
 
 @router.get("/by-code/{code}")
@@ -29,16 +29,16 @@ def get_child_by_code(code: str, db: Session = Depends(get_db)):
     child = db.query(Child).filter(Child.access_code == code).first()
     if not child:
         raise HTTPException(404, "無効なコードです")
-    return {"id": child.id, "name": child.name, "stage": child.stage or 1}
+    return {"id": child.id, "name": child.name, "round": child.round or 1}
 
 
 @router.post("")
 def add_child(body: ChildUpdate, db: Session = Depends(get_db)):
     import secrets
-    child = Child(name=body.name, stage=1, access_code=secrets.token_urlsafe(8))
+    child = Child(name=body.name, round=1, access_code=secrets.token_urlsafe(8))
     db.add(child)
     db.commit()
-    return {"id": child.id, "name": child.name, "stage": child.stage, "access_code": child.access_code}
+    return {"id": child.id, "name": child.name, "round": child.round or 1, "access_code": child.access_code}
 
 
 @router.put("/{child_id}")
@@ -51,31 +51,31 @@ def update_child(child_id: int, body: ChildUpdate, db: Session = Depends(get_db)
     return {"id": child.id, "name": child.name}
 
 
-def _get_stage(db: Session, child_id: int) -> int:
+def _get_round(db: Session, child_id: int) -> int:
     child = db.query(Child).get(child_id)
-    return child.stage if child and child.stage else 1
+    return child.round if child and child.round else 1
 
 
-def _is_cleared(db: Session, child_id: int, question_id: int, stage: int | None = None) -> bool:
-    if stage is None:
-        stage = _get_stage(db, child_id)
+def _is_cleared(db: Session, child_id: int, question_id: int, current_round: int | None = None) -> bool:
+    if current_round is None:
+        current_round = _get_round(db, child_id)
     answers = (
         db.query(Answer)
-        .filter(Answer.child_id == child_id, Answer.question_id == question_id)
+        .filter(Answer.child_id == child_id, Answer.question_id == question_id, Answer.round == current_round)
         .all()
     )
     if not answers:
         return False
     correct = sum(1 for a in answers if a.correct)
     wrong = sum(1 for a in answers if not a.correct)
-    return correct > wrong + (stage - 1)
+    return correct > wrong
 
 
-def _get_cleared_set(db: Session, child_id: int, stage: int | None = None) -> set[int]:
-    """クリア済み問題IDのセットを一括取得"""
-    if stage is None:
-        stage = _get_stage(db, child_id)
-    answers = db.query(Answer).filter(Answer.child_id == child_id).all()
+def _get_cleared_set(db: Session, child_id: int, current_round: int | None = None) -> set[int]:
+    """クリア済み問題IDのセットを一括取得（現在のラウンドの解答のみ）"""
+    if current_round is None:
+        current_round = _get_round(db, child_id)
+    answers = db.query(Answer).filter(Answer.child_id == child_id, Answer.round == current_round).all()
     stats: dict[int, list[int]] = {}  # question_id -> [correct, wrong]
     for a in answers:
         if a.question_id not in stats:
@@ -84,7 +84,7 @@ def _get_cleared_set(db: Session, child_id: int, stage: int | None = None) -> se
             stats[a.question_id][0] += 1
         else:
             stats[a.question_id][1] += 1
-    return {qid for qid, (c, w) in stats.items() if c > w + (stage - 1)}
+    return {qid for qid, (c, w) in stats.items() if c > w}
 
 
 def _get_awaiting_parent_set(db: Session, child_id: int) -> set[int]:
@@ -99,24 +99,28 @@ def _get_awaiting_parent_set(db: Session, child_id: int) -> set[int]:
     return {r[0] for r in rows}
 
 
-def _annotate_history(q_answers, points_per_clear, stage: int = 1):
-    """各解答に cleared_by_this / points_earned を付与"""
+def _annotate_history(q_answers, points_per_clear, current_round: int = 1):
+    """各解答に cleared_by_this / points_earned を付与（ラウンドごとに集計）"""
     history = []
-    c = 0
-    w = 0
-    clear_count = 0  # 何回クリアしたか
-    was_cleared_at_stage = {s: False for s in range(1, stage + 1)}
+    # ラウンドごとの正解/不正解を追跡
+    round_stats: dict[int, list[int]] = {}  # round -> [correct, wrong]
+    round_cleared: dict[int, bool] = {}  # round -> already_cleared
     for a in q_answers:
+        r = a.round if hasattr(a, 'round') and a.round else 1
+        if r not in round_stats:
+            round_stats[r] = [0, 0]
+            round_cleared[r] = False
         if a.correct:
-            c += 1
+            round_stats[r][0] += 1
         else:
-            w += 1
-        # 現在のステージでクリアしているか
-        is_cleared = c > w + (stage - 1)
-        newly = is_cleared and not was_cleared_at_stage.get(stage, False)
+            round_stats[r][1] += 1
+        c, w = round_stats[r]
+        is_cleared = c > w
+        newly = is_cleared and not round_cleared[r]
         history.append({
             "date": a.answered_date.isoformat(),
             "correct": a.correct,
+            "round": r,
             "cleared_after": is_cleared,
             "cleared_by_this": newly,
             "points_earned": points_per_clear if newly else 0,
@@ -124,7 +128,7 @@ def _annotate_history(q_answers, points_per_clear, stage: int = 1):
             "wrong_so_far": w,
         })
         if newly:
-            was_cleared_at_stage[stage] = True
+            round_cleared[r] = True
     return history
 
 
@@ -136,13 +140,32 @@ def _get_points_per_clear(db: Session) -> float:
         return 2
 
 
+def _count_clears(q_answers) -> int:
+    """この問題が全ラウンド通じて何回クリアされたかを数える"""
+    round_stats: dict[int, list[int]] = {}
+    round_cleared: dict[int, bool] = {}
+    for a in q_answers:
+        r = a.round if hasattr(a, 'round') and a.round else 1
+        if r not in round_stats:
+            round_stats[r] = [0, 0]
+            round_cleared[r] = False
+        if a.correct:
+            round_stats[r][0] += 1
+        else:
+            round_stats[r][1] += 1
+        c, w = round_stats[r]
+        if c > w and not round_cleared[r]:
+            round_cleared[r] = True
+    return sum(1 for v in round_cleared.values() if v)
+
+
 @router.get("/{child_id}/progress")
 def get_progress(child_id: int, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
-    stage = _get_stage(db, child_id)
+    current_round = _get_round(db, child_id)
     questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
     answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
     ppc = _get_points_per_clear(db)
@@ -155,13 +178,19 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
     result = []
     for q in questions:
         q_answers = answer_map.get(q.id, [])
-        correct_count = sum(1 for a in q_answers if a.correct)
-        wrong_count = sum(1 for a in q_answers if not a.correct)
-        total = len(q_answers)
-        cleared = correct_count > wrong_count + (stage - 1) if total > 0 else False
-        accuracy = round(correct_count / total * 100) if total > 0 else None
+        # クリア判定は現在のラウンドの解答のみ
+        current_round_answers = [a for a in q_answers if (a.round or 1) == current_round]
+        correct_count = sum(1 for a in current_round_answers if a.correct)
+        wrong_count = sum(1 for a in current_round_answers if not a.correct)
+        total_current = len(current_round_answers)
+        cleared = correct_count > wrong_count if total_current > 0 else False
+        # 正答率は全ラウンドの合計
+        total_all = len(q_answers)
+        accuracy = round(sum(1 for a in q_answers if a.correct) / total_all * 100) if total_all > 0 else None
+        # クリア回数（過去の全ラウンドで何回クリアしたか）
+        clear_count = _count_clears(q_answers)
 
-        history = _annotate_history(q_answers, ppc, stage)
+        history = _annotate_history(q_answers, ppc, current_round)
 
         result.append({
             "question_id": q.id,
@@ -170,6 +199,7 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
             "japanese": q.japanese,
             "english": q.english,
             "cleared": cleared,
+            "clear_count": clear_count,
             "accuracy": accuracy,
             "history": history,
         })
@@ -293,7 +323,8 @@ def get_question_detail(child_id: int, question_id: int, db: Session = Depends(g
         .order_by(Answer.id)
         .all()
     )
-    history = _annotate_history(answers, _get_points_per_clear(db))
+    current_round = _get_round(db, child_id)
+    history = _annotate_history(answers, _get_points_per_clear(db), current_round)
 
     # この子供のこの問題に対する全 grading（AIコメント＋チャット履歴）
     gradings = (
@@ -379,24 +410,22 @@ def clear_session(child_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-# ─── ステージ変更 ───
+# ─── ラウンド管理 ───
 
 
-class StageBody(BaseModel):
-    stage: int
-
-
-@router.put("/{child_id}/stage")
-def update_stage(child_id: int, body: StageBody, db: Session = Depends(get_db)):
-    """子供のステージを変更"""
+@router.post("/{child_id}/new-round")
+def start_new_round(child_id: int, db: Session = Depends(get_db)):
+    """復習開始: ラウンドを1つ進める（全問が未クリア状態に戻る）"""
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
-    if body.stage < 1:
-        raise HTTPException(400, "ステージは1以上")
-    child.stage = body.stage
+    child.round = (child.round or 1) + 1
+    # 進行中のセッションがあれば削除
+    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    if session:
+        db.delete(session)
     db.commit()
-    return {"id": child.id, "name": child.name, "stage": child.stage}
+    return {"id": child.id, "name": child.name, "round": child.round}
 
 
 @router.get("/timeline")
@@ -412,28 +441,27 @@ def get_timeline(limit: int = 100, db: Session = Depends(get_db)):
         .all()
     )
 
-    # クリア判定のため、子供ごとのステージと全解答を取得
+    # クリア判定のため、子供ごとのラウンドと全解答を取得
     children = {c.id: c for c in db.query(Child).all()}
     ppc = _get_points_per_clear(db)
 
-    # 子供×問題ごとの累計を事前計算（クリア判定用）
+    # 子供×問題×ラウンドご��の累計を事前計算（クリア判定用）
     all_answers = (
         db.query(Answer)
         .order_by(Answer.answered_date)
         .all()
     )
-    # {(child_id, question_id): [(correct, answered_date), ...]}
-    answer_seq: dict[tuple[int, int], list] = {}
+    # {(child_id, question_id, round): [(correct, answer_id), ...]}
+    answer_seq: dict[tuple[int, int, int], list] = {}
     for a in all_answers:
-        key = (a.child_id, a.question_id)
+        key = (a.child_id, a.question_id, a.round or 1)
         if key not in answer_seq:
             answer_seq[key] = []
         answer_seq[key].append((a.correct, a.id))
 
-    # 各解答がクリアを引き起こしたか判定
+    # 各解答がクリアを引き��こしたか判定
     clear_answers: set[int] = set()  # answer.id のセット
-    for (cid, qid), seq in answer_seq.items():
-        stage = children[cid].stage or 1
+    for (cid, qid, rnd), seq in answer_seq.items():
         c = w = 0
         was_cleared = False
         for correct, aid in seq:
@@ -441,7 +469,7 @@ def get_timeline(limit: int = 100, db: Session = Depends(get_db)):
                 c += 1
             else:
                 w += 1
-            is_cleared = c > w + (stage - 1)
+            is_cleared = c > w
             if is_cleared and not was_cleared:
                 clear_answers.add(aid)
                 was_cleared = True

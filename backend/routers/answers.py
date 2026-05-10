@@ -19,17 +19,17 @@ class AnswersSubmit(BaseModel):
     answers: list[AnswerItem]
 
 
-def _is_cleared(db: Session, child_id: int, question_id: int, stage: int = 1) -> bool:
+def _is_cleared(db: Session, child_id: int, question_id: int, current_round: int = 1) -> bool:
     answers = (
         db.query(Answer)
-        .filter(Answer.child_id == child_id, Answer.question_id == question_id)
+        .filter(Answer.child_id == child_id, Answer.question_id == question_id, Answer.round == current_round)
         .all()
     )
     if not answers:
         return False
     correct = sum(1 for a in answers if a.correct)
     wrong = sum(1 for a in answers if not a.correct)
-    return correct > wrong + (stage - 1)
+    return correct > wrong
 
 
 @router.post("/{child_id}/answers")
@@ -38,14 +38,14 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
-    stage = child.stage or 1
+    current_round = child.round or 1
     now = now_jst()
     today = now.date()
 
     # Check which questions were cleared BEFORE recording
     was_cleared = {}
     for item in body.answers:
-        was_cleared[item.question_id] = _is_cleared(db, child_id, item.question_id, stage)
+        was_cleared[item.question_id] = _is_cleared(db, child_id, item.question_id, current_round)
 
     # Record answers
     for item in body.answers:
@@ -57,6 +57,7 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
             question_id=item.question_id,
             answered_date=now,
             correct=item.correct,
+            round=current_round,
         ))
 
     db.flush()
@@ -64,7 +65,7 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
     # Check newly cleared
     newly_cleared = []
     for item in body.answers:
-        if not was_cleared[item.question_id] and _is_cleared(db, child_id, item.question_id, stage):
+        if not was_cleared[item.question_id] and _is_cleared(db, child_id, item.question_id, current_round):
             q = db.query(Question).get(item.question_id)
             newly_cleared.append(q)
 

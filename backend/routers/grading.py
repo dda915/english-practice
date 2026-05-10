@@ -268,17 +268,17 @@ class FeedbackBody(BaseModel):
     feedback: str  # 'accept' | 'question'
 
 
-def _is_cleared(db: Session, child_id: int, question_id: int, stage: int = 1) -> bool:
+def _is_cleared(db: Session, child_id: int, question_id: int, current_round: int = 1) -> bool:
     answers = (
         db.query(Answer)
-        .filter(Answer.child_id == child_id, Answer.question_id == question_id)
+        .filter(Answer.child_id == child_id, Answer.question_id == question_id, Answer.round == current_round)
         .all()
     )
     if not answers:
         return False
     correct = sum(1 for a in answers if a.correct)
     wrong = sum(1 for a in answers if not a.correct)
-    return correct > wrong + (stage - 1)
+    return correct > wrong
 
 
 @router.post("/api/gradings/{grading_id}/feedback")
@@ -332,16 +332,17 @@ def _confirm_grading(db: Session, g: Grading, batch: GradingBatch, final_correct
     if g.status in ("confirmed", "parent_confirmed"):
         return 0, False
     child = db.query(Child).get(batch.child_id)
-    stage = child.stage if child and child.stage else 1
-    was_cleared = _is_cleared(db, batch.child_id, g.question_id, stage)
+    current_round = child.round if child and child.round else 1
+    was_cleared = _is_cleared(db, batch.child_id, g.question_id, current_round)
     db.add(Answer(
         child_id=batch.child_id,
         question_id=g.question_id,
         answered_date=now_jst(),
         correct=final_correct,
+        round=current_round,
     ))
     db.flush()
-    now_cleared = _is_cleared(db, batch.child_id, g.question_id, stage)
+    now_cleared = _is_cleared(db, batch.child_id, g.question_id, current_round)
     g.status = "confirmed"
     g.final_correct = final_correct
     if not was_cleared and now_cleared:
@@ -629,16 +630,17 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
 
     # Answer 記録＋ポイント判定（finalの正誤で）
     child = db.query(Child).get(batch.child_id)
-    stage = child.stage if child and child.stage else 1
-    was_cleared = _is_cleared(db, batch.child_id, g.question_id, stage)
+    current_round = child.round if child and child.round else 1
+    was_cleared = _is_cleared(db, batch.child_id, g.question_id, current_round)
     db.add(Answer(
         child_id=batch.child_id,
         question_id=g.question_id,
         answered_date=now_jst(),
         correct=body.final_correct,
+        round=current_round,
     ))
     db.flush()
-    now_cleared = _is_cleared(db, batch.child_id, g.question_id, stage)
+    now_cleared = _is_cleared(db, batch.child_id, g.question_id, current_round)
 
     g.status = "parent_confirmed"
     g.final_correct = body.final_correct

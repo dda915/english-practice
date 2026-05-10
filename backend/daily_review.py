@@ -30,14 +30,14 @@ def _get_daily_stats(db, child_id: int, today: datetime):
 
     # 今日クリアした問題を特定（今日の解答でクリア条件を満たしたもの）
     child = db.query(Child).get(child_id)
-    stage = child.stage if child and child.stage else 1
+    current_round = child.round if child and child.round else 1
 
     cleared_questions = []
     question_ids_today = set(a.question_id for a in answers)
     for qid in question_ids_today:
         all_answers = (
             db.query(Answer)
-            .filter(Answer.child_id == child_id, Answer.question_id == qid)
+            .filter(Answer.child_id == child_id, Answer.question_id == qid, Answer.round == current_round)
             .order_by(Answer.answered_date)
             .all()
         )
@@ -49,7 +49,7 @@ def _get_daily_stats(db, child_id: int, today: datetime):
                 c += 1
             else:
                 w += 1
-            is_cleared = c > w + (stage - 1)
+            is_cleared = c > w
             if is_cleared and not was_cleared:
                 # このクリアが今日の解答によるものか
                 if a.answered_date >= start:

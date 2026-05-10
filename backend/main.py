@@ -138,12 +138,34 @@ def _seed_gag_questions():
         print(f"Seed warning (gag questions): {e}")
 
 
+def _migrate_round_system():
+    """ラウンド制: children.round カラムと answers.round カラムを追加"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        # children.round
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+        if "round" not in cols:
+            conn.execute("ALTER TABLE children ADD COLUMN round INTEGER NOT NULL DEFAULT 1")
+        # answers.round
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "answers" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(answers)")]
+            if "round" not in cols:
+                conn.execute("ALTER TABLE answers ADD COLUMN round INTEGER NOT NULL DEFAULT 1")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning (round system): {e}")
+
+
 _migrate_unit_number()
 _migrate_grading_cols()
 _migrate_child_stage()
 _migrate_child_access_code()
 _migrate_photo_batch_id()
 _migrate_bonus_defaults()
+_migrate_round_system()
 Base.metadata.create_all(bind=engine)
 _seed_gag_questions()
 
