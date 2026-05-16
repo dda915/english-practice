@@ -1413,9 +1413,10 @@
       </div>
       <template x-for="a in awaitingParent" :key="'ap'+a.id">
         <div style="padding:12px 0; border-bottom:1px solid var(--border-light);">
-          <div style="font-size:12px; color:var(--text-sub); margin-bottom:4px;">
-            <strong x-text="a.child_name"></strong> / 問<span x-text="a.question_number"></span>
-            <span :style="a.ai_correct ? 'color:#2e7d32' : 'color:#c62828'" style="margin-left:8px; font-weight:bold;" x-text="a.ai_correct ? '○' : '×'"></span>
+          <div style="font-size:12px; color:var(--text-sub); margin-bottom:4px; display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+            <span><strong x-text="a.child_name"></strong> / 問<span x-text="a.question_number"></span></span>
+            <span :style="a.ai_correct ? 'color:#2e7d32' : 'color:#c62828'" style="font-weight:bold;" x-text="a.ai_correct ? '○' : '×'"></span>
+            <span style="font-size:11px; color:var(--text-sub); font-variant-numeric:tabular-nums;" x-text="formatDateTime(a.created_at)"></span>
           </div>
           <div style="font-size:14px; font-weight:600; margin-bottom:4px;" x-text="a.japanese"></div>
           <div style="font-size:12px; color:var(--text-sub); font-style:italic; margin-bottom:4px;">模範: <span x-text="a.english"></span></div>
