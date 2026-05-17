@@ -30,7 +30,7 @@ from .photos import PHOTO_DIR
 
 router = APIRouter(tags=["grading"])
 
-CLAUDE_MODEL = "claude-opus-4-6"
+CLAUDE_MODEL = "claude-opus-4-7"
 
 # ギャグ問題（日本語回答）の unit_number。children.py と同期。
 GAG_UNIT_NUMBER = 999.0
@@ -861,7 +861,7 @@ async function submit(correct) {{
 
 # ─── API利用状況 ───
 
-# claude-opus-4-6 価格 (USD per 1M tokens)
+# claude-opus-4-7 価格 (USD per 1M tokens)
 PRICE_INPUT_USD_PER_MTOK = 15.0
 PRICE_OUTPUT_USD_PER_MTOK = 75.0
 USD_TO_JPY = 155.0
