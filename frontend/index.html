@@ -150,6 +150,95 @@
   }
   .nav-points:hover { background: #f9efd4; }
 
+  /* ── Sub-nav (admin内サブタブ) ── */
+  .subnav {
+    display: flex; gap: 4px; margin-bottom: 20px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 4px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .subnav-tab {
+    flex: 1; min-width: 90px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; padding: 8px 10px; border-radius: 8px;
+    font-size: 13px; font-weight: 500; color: var(--text-sub);
+    cursor: pointer; transition: all 0.15s; user-select: none;
+    background: transparent; border: none; white-space: nowrap;
+  }
+  .subnav-tab:hover { background: var(--accent-light); color: var(--accent); }
+  .subnav-tab.active {
+    background: var(--accent); color: white; font-weight: 600;
+  }
+  .subnav-tab .subnav-icon { font-size: 16px; line-height: 1; }
+  @media (max-width: 640px) {
+    .subnav { position: sticky; top: 48px; }
+    .subnav-tab { font-size: 12px; padding: 8px 6px; min-height: 48px; }
+    .subnav-tab .subnav-icon { font-size: 18px; }
+  }
+  /* 子供カード（admin 子供別タブ用） */
+  .child-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 18px 20px; margin-bottom: 14px;
+  }
+  .child-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--border-light);
+  }
+  .child-card-name {
+    font-weight: 700; font-size: 16px; color: var(--accent);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .child-card-round {
+    font-size: 11px; color: var(--text-sub);
+    background: var(--accent-light); padding: 3px 10px; border-radius: 12px;
+  }
+  .child-card-section {
+    margin-bottom: 12px;
+  }
+  .child-card-section:last-child { margin-bottom: 0; }
+  .child-card-section-label {
+    font-size: 11px; font-weight: 600; color: var(--text-sub);
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+  }
+  .child-settings-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 8px 14px;
+  }
+  @media (max-width: 480px) {
+    .child-settings-grid { grid-template-columns: 1fr; }
+  }
+  .child-setting-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px;
+  }
+  .child-setting-item .label {
+    flex: 1; color: var(--text-sub); font-size: 12px;
+  }
+  .child-setting-item input {
+    width: 64px; font-size: 13px; padding: 4px 8px;
+    border: 1px solid var(--border-light); border-radius: 6px;
+    text-align: right;
+  }
+  .child-setting-item .unit {
+    font-size: 11px; color: var(--text-sub); min-width: 16px;
+  }
+  .child-url-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .child-url-row input {
+    flex: 1; font-size: 11px; padding: 5px 8px;
+    border: 1px solid var(--border-light); border-radius: 6px;
+    background: var(--card-bg); color: var(--text-sub);
+  }
+  .child-name-edit {
+    font-size: 13px; padding: 4px 8px;
+    border: 1px solid var(--border-light); border-radius: 6px;
+    width: 130px;
+  }
+
   /* ── Main ── */
   .main { max-width: 960px; margin: 0 auto; padding: 32px 24px 80px; }
   .page-header { margin-bottom: 28px; }
@@ -1353,314 +1442,329 @@
   </div>
 
   <div x-show="tab === 'admin'" class="fade-in">
-    <div class="page-header">
-      <h2>管理設定</h2>
+    <div class="page-header" style="margin-bottom:16px;">
+      <h2>管理</h2>
     </div>
 
-    <div class="card" style="margin-bottom:24px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">タイムライン</div>
-        <button class="btn btn-outline btn-sm" @click="loadTimeline()">更新</button>
-      </div>
-      <div x-show="timeline.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
-        まだ記録がありません
-      </div>
-      <div style="max-height:400px; overflow-y:auto;">
-        <template x-for="(ev, i) in timeline" :key="'tl'+i">
-          <div style="padding:8px 0; border-bottom:1px solid var(--border-light); font-size:13px; line-height:1.5;">
-            <div>
-              <strong x-text="ev.child_name" style="color:var(--primary);"></strong>が
-              問<span x-text="ev.question_number"></span>
-              <span style="color:var(--text-sub); font-size:12px;">「<span x-text="ev.japanese.length > 25 ? ev.japanese.slice(0,25)+'…' : ev.japanese"></span>」</span>に
-              <span x-show="ev.correct" style="color:var(--correct); font-weight:700;">○ 正解</span>
-              <span x-show="!ev.correct" style="color:var(--wrong); font-weight:700;">× 不正解</span>
-              <template x-if="ev.cleared">
-                <span style="color:var(--gold); font-weight:600;"> → クリア! +<span x-text="fmtPt(ev.points_earned)"></span>pt</span>
-              </template>
+    <!-- サブタブナビ -->
+    <div class="subnav">
+      <button class="subnav-tab" :class="adminSubTab === 'activity' && 'active'" @click="adminSubTab = 'activity'">
+        <span class="subnav-icon">&#x1F4CB;</span><span>アクティビティ</span>
+      </button>
+      <button class="subnav-tab" :class="adminSubTab === 'children' && 'active'" @click="adminSubTab = 'children'">
+        <span class="subnav-icon">&#x1F476;</span><span>子供別</span>
+      </button>
+      <button class="subnav-tab" :class="adminSubTab === 'system' && 'active'" @click="adminSubTab = 'system'">
+        <span class="subnav-icon">&#x2699;&#xFE0F;</span><span>システム</span>
+      </button>
+    </div>
+
+    <!-- アクティビティ -->
+    <div x-show="adminSubTab === 'activity'">
+
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="font-size:13px; font-weight:600; color:var(--text-sub);">要確認（AIチャットで保留になった採点）</div>
+          <button class="btn btn-outline btn-sm" @click="loadAwaitingParent()">更新</button>
+        </div>
+        <div x-show="awaitingParent.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+          要確認の採点はありません
+        </div>
+        <template x-for="a in awaitingParent" :key="'ap'+a.id">
+          <div style="padding:12px 0; border-bottom:1px solid var(--border-light);">
+            <div style="font-size:12px; color:var(--text-sub); margin-bottom:4px; display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+              <span><strong x-text="a.child_name"></strong> / 問<span x-text="a.question_number"></span></span>
+              <span :style="a.ai_correct ? 'color:#2e7d32' : 'color:#c62828'" style="font-weight:bold;" x-text="a.ai_correct ? '○' : '×'"></span>
+              <span style="font-size:11px; color:var(--text-sub); font-variant-numeric:tabular-nums;" x-text="formatDateTime(a.created_at)"></span>
             </div>
-            <div style="font-size:11px; color:var(--text-sub);" x-text="formatDateTime(ev.time)"></div>
+            <div style="font-size:14px; font-weight:600; margin-bottom:4px;" x-text="a.japanese"></div>
+            <div style="font-size:12px; color:var(--text-sub); font-style:italic; margin-bottom:4px;">模範: <span x-text="a.english"></span></div>
+            <div style="font-size:12px; margin-bottom:4px;">娘の回答: <span style="font-style:italic;" x-text="a.ai_reading || '(読み取れませんでした)'"></span></div>
+            <div style="font-size:12px; color:var(--text-sub); margin-bottom:6px;" x-text="a.ai_comment"></div>
+            <a :href="'/review/' + a.id" target="_blank" class="btn btn-outline btn-sm">確認画面を開く</a>
           </div>
         </template>
       </div>
-    </div>
 
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">交換リクエスト</div>
-      <div x-show="exchangeRequests.filter(r => !r.fulfilled).length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
-        未対応のリクエストはありません
-      </div>
-      <template x-for="r in exchangeRequests" :key="'er'+r.id">
-        <div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-light); font-size:13px;">
-          <input type="checkbox" :checked="r.fulfilled" @change="fulfillRequest(r.id)" :disabled="r.fulfilled"
-            style="width:18px; height:18px; cursor:pointer;">
-          <div :style="r.fulfilled && 'text-decoration:line-through; opacity:0.5'">
-            <strong x-text="r.child_name"></strong>
-            <span x-text="r.date"></span> —
-            <span x-text="r.type === 'money' ? 'お金 ' + r.converted_value + '円' : 'スマホ ' + r.converted_value + '分'"></span>
-            <span style="color:var(--text-sub);">（<span x-text="fmtPt(r.points)"></span>pt）</span>
-          </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">交換リクエスト</div>
+        <div x-show="exchangeRequests.filter(r => !r.fulfilled).length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+          未対応のリクエストはありません
         </div>
-      </template>
-    </div>
-
-    <div class="card" style="margin-bottom:24px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">要確認（AIチャットで保留になった採点）</div>
-        <button class="btn btn-outline btn-sm" @click="loadAwaitingParent()">更新</button>
-      </div>
-      <div x-show="awaitingParent.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
-        要確認の採点はありません
-      </div>
-      <template x-for="a in awaitingParent" :key="'ap'+a.id">
-        <div style="padding:12px 0; border-bottom:1px solid var(--border-light);">
-          <div style="font-size:12px; color:var(--text-sub); margin-bottom:4px; display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
-            <span><strong x-text="a.child_name"></strong> / 問<span x-text="a.question_number"></span></span>
-            <span :style="a.ai_correct ? 'color:#2e7d32' : 'color:#c62828'" style="font-weight:bold;" x-text="a.ai_correct ? '○' : '×'"></span>
-            <span style="font-size:11px; color:var(--text-sub); font-variant-numeric:tabular-nums;" x-text="formatDateTime(a.created_at)"></span>
-          </div>
-          <div style="font-size:14px; font-weight:600; margin-bottom:4px;" x-text="a.japanese"></div>
-          <div style="font-size:12px; color:var(--text-sub); font-style:italic; margin-bottom:4px;">模範: <span x-text="a.english"></span></div>
-          <div style="font-size:12px; margin-bottom:4px;">娘の回答: <span style="font-style:italic;" x-text="a.ai_reading || '(読み取れませんでした)'"></span></div>
-          <div style="font-size:12px; color:var(--text-sub); margin-bottom:6px;" x-text="a.ai_comment"></div>
-          <a :href="'/review/' + a.id" target="_blank" class="btn btn-outline btn-sm">確認画面を開く</a>
-        </div>
-      </template>
-    </div>
-
-    <!-- プッシュ通知カード（現在無効化中）-->
-
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">アクセスURL（子供ごとの専用リンク）</div>
-      <template x-for="c in children" :key="'ac'+c.id">
-        <div style="padding:8px 0; border-bottom:1px solid var(--border-light); font-size:13px;">
-          <strong x-text="c.name"></strong>
-          <div style="margin-top:4px; display:flex; align-items:center; gap:8px;">
-            <input type="text" readonly
-              :value="location.origin + '/?kid=' + c.access_code"
-              style="flex:1; font-size:11px; padding:4px 8px; border:1px solid var(--border-light); border-radius:4px; background:var(--card-bg); color:var(--text-sub);"
-              @click="$el.select()">
-            <button class="btn btn-outline btn-sm" @click="navigator.clipboard.writeText(location.origin + '/?kid=' + c.access_code); showToast('コピーしました')">コピー</button>
-          </div>
-        </div>
-      </template>
-      <div style="margin-top:12px; display:flex; gap:8px;">
-        <input type="text" x-model="newChildName" placeholder="新しい子供の名前" style="flex:1; font-size:13px; padding:6px 10px; border:1px solid var(--border-light); border-radius:6px;">
-        <button class="btn btn-primary btn-sm" @click="addChild()">追加</button>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:24px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">登録端末（保護者モード）</div>
-        <button class="btn btn-outline btn-sm" @click="loadParentDevices()">更新</button>
-      </div>
-      <div x-show="parentDevices.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
-        登録された端末はありません
-      </div>
-      <template x-for="d in parentDevices" :key="'pd'+d.id">
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 8px; border-bottom:1px solid var(--border-light);"
-             :style="d.device_id === myDeviceId ? 'background:var(--accent-light); border-radius:8px;' : ''">
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
-              <span x-text="d.name"></span>
-              <span x-show="d.device_id === myDeviceId" style="font-size:10px; background:var(--accent); color:white; padding:2px 8px; border-radius:10px;">この端末</span>
-            </div>
-            <div style="font-size:10px; color:var(--text-sub);">
-              登録: <span x-text="formatDate(d.registered_at)"></span>
-              <span x-show="d.last_seen_at"> / 最終: <span x-text="formatDate(d.last_seen_at)"></span></span>
+        <template x-for="r in exchangeRequests" :key="'er'+r.id">
+          <div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-light); font-size:13px;">
+            <input type="checkbox" :checked="r.fulfilled" @change="fulfillRequest(r.id)" :disabled="r.fulfilled"
+              style="width:18px; height:18px; cursor:pointer;">
+            <div :style="r.fulfilled && 'text-decoration:line-through; opacity:0.5'">
+              <strong x-text="r.child_name"></strong>
+              <span x-text="r.date"></span> —
+              <span x-text="r.type === 'money' ? 'お金 ' + r.converted_value + '円' : 'スマホ ' + r.converted_value + '分'"></span>
+              <span style="color:var(--text-sub);">（<span x-text="fmtPt(r.points)"></span>pt）</span>
             </div>
           </div>
-          <button class="btn btn-outline btn-sm" @click="unregisterDevice(d)" style="color:var(--wrong); border-color:var(--wrong);">解除</button>
-        </div>
-      </template>
-    </div>
+        </template>
+      </div>
 
-    <div class="card" style="margin-bottom:24px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">API利用状況 (Claude Sonnet 4.5)</div>
-        <button class="btn btn-outline btn-sm" @click="loadApiUsage()">更新</button>
-      </div>
-      <div x-show="apiUsage.rows.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
-        まだ利用実績はありません
-      </div>
-      <table x-show="apiUsage.rows.length > 0" style="width:100%; font-size:12px; border-collapse:collapse;">
-        <thead>
-          <tr style="text-align:left; color:var(--text-sub); border-bottom:1px solid var(--border-light);">
-            <th style="padding:6px 4px;">月</th>
-            <th>子供</th>
-            <th style="text-align:right;">採点</th>
-            <th style="text-align:right;">チャット</th>
-            <th style="text-align:right;">入力tok</th>
-            <th style="text-align:right;">出力tok</th>
-            <th style="text-align:right;">推定¥</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template x-for="r in apiUsage.rows" :key="'au'+r.month+'_'+r.child_id">
-            <tr style="border-bottom:1px solid var(--border-light);">
-              <td style="padding:6px 4px;" x-text="r.month"></td>
-              <td x-text="r.child_name"></td>
-              <td style="text-align:right;" x-text="r.grading_count"></td>
-              <td style="text-align:right;" x-text="r.chat_count"></td>
-              <td style="text-align:right;" x-text="r.input_tokens.toLocaleString()"></td>
-              <td style="text-align:right;" x-text="r.output_tokens.toLocaleString()"></td>
-              <td style="text-align:right; font-weight:600;" x-text="'¥' + r.estimated_cost_jpy"></td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-      <div style="font-size:10px; color:var(--text-sub); margin-top:8px;">
-        単価: input $<span x-text="apiUsage.price_usd_per_mtok.input"></span>/Mtok, output $<span x-text="apiUsage.price_usd_per_mtok.output"></span>/Mtok, 為替: ¥<span x-text="apiUsage.usd_to_jpy"></span>/$
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント・交換レート・出題数（子供ごと）</div>
-      <template x-for="c in children" :key="'cs'+c.id">
-        <div style="padding:10px 0; border-bottom:1px solid var(--border-light);">
-          <div style="font-weight:600; font-size:14px; margin-bottom:8px;" x-text="c.name"></div>
+      <div class="card" style="margin-bottom:16px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント手動調整</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
           <div class="config-row">
-            <span class="config-label">1問クリア</span>
-            <input type="number" class="config-input" :value="c.points_per_clear" min="0.1" step="0.1"
-              @change="saveChildSettings(c.id, { points_per_clear: parseFloat($event.target.value) })">
+            <span class="config-label">対象</span>
+            <select x-model.number="adjustChildId" style="font-size:13px; padding:4px 8px; border:1px solid var(--border-light); border-radius:6px; flex:1;">
+              <template x-for="c in children" :key="'adj'+c.id">
+                <option :value="c.id" x-text="c.name"></option>
+              </template>
+            </select>
+          </div>
+          <div class="config-row">
+            <span class="config-label">ポイント</span>
+            <input type="number" class="config-input" x-model.number="adjustAmount" placeholder="例: 5 or -3" style="width:100px;">
             <span style="font-size:13px; color:var(--text-sub)">pt</span>
           </div>
           <div class="config-row">
-            <span class="config-label">1pt → お金</span>
-            <input type="number" class="config-input" :value="c.exchange_rate_money" min="0.1" step="0.1"
-              @change="saveChildSettings(c.id, { exchange_rate_money: parseFloat($event.target.value) })">
-            <span style="font-size:13px; color:var(--text-sub)">円</span>
+            <span class="config-label">理由</span>
+            <input type="text" x-model="adjustDescription" placeholder="例: お手伝いボーナス"
+              style="flex:1; font-size:13px; padding:6px 10px; border:1px solid var(--border-light); border-radius:6px;">
           </div>
-          <div class="config-row">
-            <span class="config-label">1pt → スマホ</span>
-            <input type="number" class="config-input" :value="c.exchange_rate_phone" min="0.1" step="0.1"
-              @change="saveChildSettings(c.id, { exchange_rate_phone: parseFloat($event.target.value) })">
-            <span style="font-size:13px; color:var(--text-sub)">分</span>
+          <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <button class="btn btn-primary btn-sm" @click="adjustPoints()"
+              :disabled="!adjustAmount || !adjustDescription.trim()">適用</button>
           </div>
-          <div class="config-row" style="margin-bottom:0;">
-            <span class="config-label">出題数</span>
-            <input type="number" class="config-input" :value="c.batch_size" min="1" max="50"
-              @change="saveChildSettings(c.id, { batch_size: parseInt($event.target.value) })">
-            <span style="font-size:13px; color:var(--text-sub)">問</span>
-          </div>
-        </div>
-      </template>
-    </div>
-
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント手動調整</div>
-      <div style="display:flex; flex-direction:column; gap:10px;">
-        <div class="config-row">
-          <span class="config-label">対象</span>
-          <select x-model.number="adjustChildId" style="font-size:13px; padding:4px 8px; border:1px solid var(--border-light); border-radius:6px; flex:1;">
-            <template x-for="c in children" :key="'adj'+c.id">
-              <option :value="c.id" x-text="c.name"></option>
-            </template>
-          </select>
-        </div>
-        <div class="config-row">
-          <span class="config-label">ポイント</span>
-          <input type="number" class="config-input" x-model.number="adjustAmount" placeholder="例: 5 or -3" style="width:100px;">
-          <span style="font-size:13px; color:var(--text-sub)">pt</span>
-        </div>
-        <div class="config-row">
-          <span class="config-label">理由</span>
-          <input type="text" x-model="adjustDescription" placeholder="例: お手伝いボーナス"
-            style="flex:1; font-size:13px; padding:6px 10px; border:1px solid var(--border-light); border-radius:6px;">
-        </div>
-        <div style="display:flex; justify-content:flex-end; gap:8px;">
-          <button class="btn btn-primary btn-sm" @click="adjustPoints()"
-            :disabled="!adjustAmount || !adjustDescription.trim()">適用</button>
         </div>
       </div>
-    </div>
 
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">名前の変更</div>
-      <template x-for="c in children" :key="'name'+c.id">
-        <div class="config-row">
-          <span class="config-label" x-text="'#' + c.id"></span>
-          <input type="text" class="name-edit-input" :value="c.name" @change="updateChildName(c.id, $event.target.value)" style="width:140px;">
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="font-size:13px; font-weight:600; color:var(--text-sub);">タイムライン</div>
+          <button class="btn btn-outline btn-sm" @click="loadTimeline()">更新</button>
         </div>
-      </template>
-    </div>
-
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">復習（ラウンド管理）</div>
-      <div style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">
-        「復習開始」で全問が未クリアに戻り、もう一度最初から解き直せます。過去の解答履歴は残ります。
+        <div x-show="timeline.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+          まだ記録がありません
+        </div>
+        <div style="max-height:400px; overflow-y:auto;">
+          <template x-for="(ev, i) in timeline" :key="'tl'+i">
+            <div style="padding:8px 0; border-bottom:1px solid var(--border-light); font-size:13px; line-height:1.5;">
+              <div>
+                <strong x-text="ev.child_name" style="color:var(--primary);"></strong>が
+                問<span x-text="ev.question_number"></span>
+                <span style="color:var(--text-sub); font-size:12px;">「<span x-text="ev.japanese.length > 25 ? ev.japanese.slice(0,25)+'…' : ev.japanese"></span>」</span>に
+                <span x-show="ev.correct" style="color:var(--correct); font-weight:700;">○ 正解</span>
+                <span x-show="!ev.correct" style="color:var(--wrong); font-weight:700;">× 不正解</span>
+                <template x-if="ev.cleared">
+                  <span style="color:var(--gold); font-weight:600;"> → クリア! +<span x-text="fmtPt(ev.points_earned)"></span>pt</span>
+                </template>
+              </div>
+              <div style="font-size:11px; color:var(--text-sub);" x-text="formatDateTime(ev.time)"></div>
+            </div>
+          </template>
+        </div>
       </div>
-      <template x-for="c in children" :key="'round'+c.id">
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-light); font-size:14px;">
-          <div>
-            <strong x-text="c.name"></strong>
-            <span style="font-size:12px; color:var(--text-sub); margin-left:8px;">ラウンド <span x-text="c.round || 1"></span></span>
-          </div>
-          <button class="btn btn-outline btn-sm" @click="startNewRound(c.id, c.name)"
-                  style="color:var(--accent); border-color:var(--accent);">復習開始</button>
-        </div>
-      </template>
+
     </div>
 
-    <div class="card" style="margin-bottom:24px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text-sub);">ボーナスタイム</div>
+    <!-- 子供別 -->
+    <div x-show="adminSubTab === 'children'">
+
+      <template x-for="c in children" :key="'cc'+c.id">
+        <div class="child-card">
+          <div class="child-card-header">
+            <div class="child-card-name">
+              <input type="text" class="child-name-edit" :value="c.name"
+                @change="updateChildName(c.id, $event.target.value)">
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="child-card-round">ラウンド <span x-text="c.round || 1"></span></span>
+              <button class="btn btn-outline btn-sm" @click="startNewRound(c.id, c.name)"
+                style="color:var(--accent); border-color:var(--accent); padding:4px 10px;">復習開始</button>
+            </div>
+          </div>
+
+          <div class="child-card-section">
+            <div class="child-card-section-label">ポイント・レート・出題数</div>
+            <div class="child-settings-grid">
+              <div class="child-setting-item">
+                <span class="label">1問クリア</span>
+                <input type="number" :value="c.points_per_clear" min="0.1" step="0.1"
+                  @change="saveChildSettings(c.id, { points_per_clear: parseFloat($event.target.value) })">
+                <span class="unit">pt</span>
+              </div>
+              <div class="child-setting-item">
+                <span class="label">出題数</span>
+                <input type="number" :value="c.batch_size" min="1" max="50"
+                  @change="saveChildSettings(c.id, { batch_size: parseInt($event.target.value) })">
+                <span class="unit">問</span>
+              </div>
+              <div class="child-setting-item">
+                <span class="label">1pt → お金</span>
+                <input type="number" :value="c.exchange_rate_money" min="0.1" step="0.1"
+                  @change="saveChildSettings(c.id, { exchange_rate_money: parseFloat($event.target.value) })">
+                <span class="unit">円</span>
+              </div>
+              <div class="child-setting-item">
+                <span class="label">1pt → スマホ</span>
+                <input type="number" :value="c.exchange_rate_phone" min="0.1" step="0.1"
+                  @change="saveChildSettings(c.id, { exchange_rate_phone: parseFloat($event.target.value) })">
+                <span class="unit">分</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="child-card-section">
+            <div class="child-card-section-label">アクセスURL（専用リンク）</div>
+            <div class="child-url-row">
+              <input type="text" readonly
+                :value="location.origin + '/?kid=' + c.access_code"
+                @click="$el.select()">
+              <button class="btn btn-outline btn-sm"
+                @click="navigator.clipboard.writeText(location.origin + '/?kid=' + c.access_code); showToast('コピーしました')">コピー</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="card" style="margin-top:16px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:10px;">子供を追加</div>
         <div style="display:flex; gap:8px;">
-          <button class="btn btn-sm" @click="toggleBonus()"
-                  :style="bonusStatus.disabled ? 'background:#43a047; color:#fff;' : 'background:#c62828; color:#fff;'"
-                  x-text="bonusStatus.disabled ? '再開' : '停止'"></button>
-          <button class="btn btn-outline btn-sm" @click="loadBonusStatus()">更新</button>
+          <input type="text" x-model="newChildName" placeholder="新しい子供の名前"
+            style="flex:1; font-size:13px; padding:8px 12px; border:1px solid var(--border-light); border-radius:6px;">
+          <button class="btn btn-primary btn-sm" @click="addChild()">追加</button>
         </div>
       </div>
-      <div x-show="bonusStatus.disabled" style="padding:8px 12px; background:#fff3e0; border:1px solid #ff9800; border-radius:6px; margin-bottom:12px; font-size:13px; color:#e65100;">
-        ⏸ ボーナスタイム停止中（ポイント加算・LINE配信ともに無効）
-      </div>
-      <div style="padding:12px; border-radius:8px; margin-bottom:12px;"
-           :style="bonusStatus.disabled ? 'background:#f5f5f5; border:1px solid var(--border-light); opacity:0.5;' : (bonusStatus.is_bonus ? 'background:#fff3e0; border:1px solid #ff9800;' : 'background:var(--card-bg); border:1px solid var(--border-light);')">
-        <div style="font-size:16px; font-weight:700; margin-bottom:4px;">
-          <span x-show="bonusStatus.is_bonus" style="color:#e65100;">&#x1F525; ボーナス中!</span>
-          <span x-show="!bonusStatus.is_bonus" style="color:var(--text-sub);">通常モード</span>
-        </div>
-        <div style="font-size:13px; color:var(--text-sub);">
-          現在のクリアポイント: <strong x-text="fmtPt(bonusStatus.points) + 'pt'"></strong>
-          <span x-show="bonusStatus.reason === 'guerrilla'" style="color:#e65100; font-size:12px;">（ゲリラ）</span>
-          <span x-show="bonusStatus.reason === 'scheduled'" style="color:#e65100; font-size:12px;">（定期）</span>
-        </div>
-        <div x-show="bonusStatus.guerrilla_until" style="font-size:12px; color:var(--text-sub); margin-top:4px;">
-          ゲリラ終了: <span x-text="bonusStatus.guerrilla_until ? formatDateTime(bonusStatus.guerrilla_until) : ''"></span>
-        </div>
-      </div>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-        <label style="font-size:12px; color:var(--text-sub);">時間:
-          <input type="number" x-model.number="guerrillaMinutes" min="1" max="120" style="width:50px; padding:4px 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">分
-        </label>
-        <label style="font-size:12px; color:var(--text-sub);">ポイント:
-          <input type="number" x-model.number="guerrillaPoints" min="1" max="100" style="width:50px; padding:4px 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">pt
-        </label>
-        <button class="btn btn-primary btn-sm" @click="startGuerrilla()" style="background:#e65100;">&#x1F389; ゲリラボーナス開始</button>
-      </div>
-      <div style="font-size:12px; color:var(--text-sub);">
-        通常: <span x-text="fmtPt(bonusStatus.normal_points)"></span>pt / ボーナス: <span x-text="fmtPt(bonusStatus.bonus_points)"></span>pt<br>
-        ボーナス時間帯: 6:30-6:45, 18:00-18:15<br>
-        対象子供ID: <span x-text="JSON.stringify(bonusStatus.bonus_child_ids || [])"></span>
-      </div>
+
     </div>
 
-    <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">CSVインポート</div>
-      <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">カラム構成: 問題番号, 和文, 模範英訳</p>
-      <div class="csv-import-area"
-        @click="$refs.csvInput.click()"
-        @dragover.prevent="$event.currentTarget.classList.add('dragover')"
-        @dragleave="$event.currentTarget.classList.remove('dragover')"
-        @drop.prevent="$event.currentTarget.classList.remove('dragover'); handleCsvDrop($event)">
-        クリックまたはドラッグ&amp;ドロップでCSVをアップロード
+    <!-- システム -->
+    <div x-show="adminSubTab === 'system'">
+
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="font-size:13px; font-weight:600; color:var(--text-sub);">ボーナスタイム</div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-sm" @click="toggleBonus()"
+                    :style="bonusStatus.disabled ? 'background:#43a047; color:#fff;' : 'background:#c62828; color:#fff;'"
+                    x-text="bonusStatus.disabled ? '再開' : '停止'"></button>
+            <button class="btn btn-outline btn-sm" @click="loadBonusStatus()">更新</button>
+          </div>
+        </div>
+        <div x-show="bonusStatus.disabled" style="padding:8px 12px; background:#fff3e0; border:1px solid #ff9800; border-radius:6px; margin-bottom:12px; font-size:13px; color:#e65100;">
+          ⏸ ボーナスタイム停止中（ポイント加算・LINE配信ともに無効）
+        </div>
+        <div style="padding:12px; border-radius:8px; margin-bottom:12px;"
+             :style="bonusStatus.disabled ? 'background:#f5f5f5; border:1px solid var(--border-light); opacity:0.5;' : (bonusStatus.is_bonus ? 'background:#fff3e0; border:1px solid #ff9800;' : 'background:var(--card-bg); border:1px solid var(--border-light);')">
+          <div style="font-size:16px; font-weight:700; margin-bottom:4px;">
+            <span x-show="bonusStatus.is_bonus" style="color:#e65100;">&#x1F525; ボーナス中!</span>
+            <span x-show="!bonusStatus.is_bonus" style="color:var(--text-sub);">通常モード</span>
+          </div>
+          <div style="font-size:13px; color:var(--text-sub);">
+            現在のクリアポイント: <strong x-text="fmtPt(bonusStatus.points) + 'pt'"></strong>
+            <span x-show="bonusStatus.reason === 'guerrilla'" style="color:#e65100; font-size:12px;">（ゲリラ）</span>
+            <span x-show="bonusStatus.reason === 'scheduled'" style="color:#e65100; font-size:12px;">（定期）</span>
+          </div>
+          <div x-show="bonusStatus.guerrilla_until" style="font-size:12px; color:var(--text-sub); margin-top:4px;">
+            ゲリラ終了: <span x-text="bonusStatus.guerrilla_until ? formatDateTime(bonusStatus.guerrilla_until) : ''"></span>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+          <label style="font-size:12px; color:var(--text-sub);">時間:
+            <input type="number" x-model.number="guerrillaMinutes" min="1" max="120" style="width:50px; padding:4px 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">分
+          </label>
+          <label style="font-size:12px; color:var(--text-sub);">ポイント:
+            <input type="number" x-model.number="guerrillaPoints" min="1" max="100" style="width:50px; padding:4px 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">pt
+          </label>
+          <button class="btn btn-primary btn-sm" @click="startGuerrilla()" style="background:#e65100;">&#x1F389; ゲリラボーナス開始</button>
+        </div>
+        <div style="font-size:12px; color:var(--text-sub);">
+          通常: <span x-text="fmtPt(bonusStatus.normal_points)"></span>pt / ボーナス: <span x-text="fmtPt(bonusStatus.bonus_points)"></span>pt<br>
+          ボーナス時間帯: 6:30-6:45, 18:00-18:15<br>
+          対象子供ID: <span x-text="JSON.stringify(bonusStatus.bonus_child_ids || [])"></span>
+        </div>
       </div>
-      <input type="file" accept=".csv" x-ref="csvInput" @change="handleCsvUpload($event)" style="display:none;">
-      <div x-show="csvResult" style="font-size:13px; margin-top:8px;">
-        <span x-show="csvResult" x-text="csvResult" style="color:var(--accent);"></span>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="font-size:13px; font-weight:600; color:var(--text-sub);">登録端末（保護者モード）</div>
+          <button class="btn btn-outline btn-sm" @click="loadParentDevices()">更新</button>
+        </div>
+        <div x-show="parentDevices.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+          登録された端末はありません
+        </div>
+        <template x-for="d in parentDevices" :key="'pd'+d.id">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 8px; border-bottom:1px solid var(--border-light);"
+               :style="d.device_id === myDeviceId ? 'background:var(--accent-light); border-radius:8px;' : ''">
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+                <span x-text="d.name"></span>
+                <span x-show="d.device_id === myDeviceId" style="font-size:10px; background:var(--accent); color:white; padding:2px 8px; border-radius:10px;">この端末</span>
+              </div>
+              <div style="font-size:10px; color:var(--text-sub);">
+                登録: <span x-text="formatDate(d.registered_at)"></span>
+                <span x-show="d.last_seen_at"> / 最終: <span x-text="formatDate(d.last_seen_at)"></span></span>
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm" @click="unregisterDevice(d)" style="color:var(--wrong); border-color:var(--wrong);">解除</button>
+          </div>
+        </template>
       </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="font-size:13px; font-weight:600; color:var(--text-sub);">API利用状況 (Claude Sonnet 4.5)</div>
+          <button class="btn btn-outline btn-sm" @click="loadApiUsage()">更新</button>
+        </div>
+        <div x-show="apiUsage.rows.length === 0" style="font-size:13px; color:var(--text-sub); text-align:center; padding:12px;">
+          まだ利用実績はありません
+        </div>
+        <div x-show="apiUsage.rows.length > 0" style="overflow-x:auto;">
+          <table style="width:100%; font-size:12px; border-collapse:collapse;">
+            <thead>
+              <tr style="text-align:left; color:var(--text-sub); border-bottom:1px solid var(--border-light);">
+                <th style="padding:6px 4px;">月</th>
+                <th>子供</th>
+                <th style="text-align:right;">採点</th>
+                <th style="text-align:right;">チャット</th>
+                <th style="text-align:right;">入力tok</th>
+                <th style="text-align:right;">出力tok</th>
+                <th style="text-align:right;">推定¥</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="r in apiUsage.rows" :key="'au'+r.month+'_'+r.child_id">
+                <tr style="border-bottom:1px solid var(--border-light);">
+                  <td style="padding:6px 4px;" x-text="r.month"></td>
+                  <td x-text="r.child_name"></td>
+                  <td style="text-align:right;" x-text="r.grading_count"></td>
+                  <td style="text-align:right;" x-text="r.chat_count"></td>
+                  <td style="text-align:right;" x-text="r.input_tokens.toLocaleString()"></td>
+                  <td style="text-align:right;" x-text="r.output_tokens.toLocaleString()"></td>
+                  <td style="text-align:right; font-weight:600;" x-text="'¥' + r.estimated_cost_jpy"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div style="font-size:10px; color:var(--text-sub); margin-top:8px;">
+          単価: input $<span x-text="apiUsage.price_usd_per_mtok.input"></span>/Mtok, output $<span x-text="apiUsage.price_usd_per_mtok.output"></span>/Mtok, 為替: ¥<span x-text="apiUsage.usd_to_jpy"></span>/$
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">CSVインポート</div>
+        <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">カラム構成: 問題番号, 和文, 模範英訳</p>
+        <div class="csv-import-area"
+          @click="$refs.csvInput.click()"
+          @dragover.prevent="$event.currentTarget.classList.add('dragover')"
+          @dragleave="$event.currentTarget.classList.remove('dragover')"
+          @drop.prevent="$event.currentTarget.classList.remove('dragover'); handleCsvDrop($event)">
+          クリックまたはドラッグ&amp;ドロップでCSVをアップロード
+        </div>
+        <input type="file" accept=".csv" x-ref="csvInput" @change="handleCsvUpload($event)" style="display:none;">
+        <div x-show="csvResult" style="font-size:13px; margin-top:8px;">
+          <span x-show="csvResult" x-text="csvResult" style="color:var(--accent);"></span>
+        </div>
+      </div>
+
     </div>
+
   </div>
 
 </div>
@@ -1669,6 +1773,7 @@
 function app() {
   return {
     tab: 'practice',
+    adminSubTab: 'activity',
     loading: false,
     questions: [],
     children: [],
