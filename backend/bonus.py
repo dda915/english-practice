@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from .database import now_jst, JST
 from .models import Setting
+from .routers.settings import get_child_setting_by_id
 
 
 def _get_setting(db: Session, key: str, default: str) -> str:
@@ -17,7 +18,7 @@ def is_bonus_time(db: Session, child_id: int) -> tuple[bool, int, str]:
     ボーナスタイム判定。
     Returns: (is_bonus, points, reason)
     """
-    normal_points = float(_get_setting(db, "points_per_clear", "2"))
+    normal_points = float(get_child_setting_by_id(db, child_id, "points_per_clear"))
     bonus_points = float(_get_setting(db, "bonus_points", "8"))
 
     if _get_setting(db, "bonus_disabled", "0") == "1":

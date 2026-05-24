@@ -7,6 +7,7 @@ from ..database import get_db
 from ..models import Child, Answer, Question, PointLog, ActiveSession, SessionPhoto, Grading, GradingBatch, ChatMessage, Message, Setting
 from ..mail import send_activity
 from .photos import PHOTO_DIR
+from .settings import get_child_setting, get_child_setting_by_id
 
 router = APIRouter(prefix="/api/children", tags=["children"])
 
@@ -21,7 +22,19 @@ class ChildUpdate(BaseModel):
 @router.get("")
 def list_children(db: Session = Depends(get_db)):
     children = db.query(Child).order_by(Child.id).all()
-    return [{"id": c.id, "name": c.name, "round": c.round or 1, "access_code": c.access_code} for c in children]
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "round": c.round or 1,
+            "access_code": c.access_code,
+            "points_per_clear": get_child_setting(db, c, "points_per_clear"),
+            "exchange_rate_money": get_child_setting(db, c, "exchange_rate_money"),
+            "exchange_rate_phone": get_child_setting(db, c, "exchange_rate_phone"),
+            "batch_size": get_child_setting(db, c, "batch_size"),
+        }
+        for c in children
+    ]
 
 
 @router.get("/by-code/{code}")
@@ -35,7 +48,16 @@ def get_child_by_code(code: str, db: Session = Depends(get_db)):
 @router.post("")
 def add_child(body: ChildUpdate, db: Session = Depends(get_db)):
     import secrets
-    child = Child(name=body.name, round=1, access_code=secrets.token_urlsafe(8))
+    from .settings import _global
+    child = Child(
+        name=body.name,
+        round=1,
+        access_code=secrets.token_urlsafe(8),
+        points_per_clear=_global(db, "points_per_clear"),
+        exchange_rate_money=_global(db, "exchange_rate_money"),
+        exchange_rate_phone=_global(db, "exchange_rate_phone"),
+        batch_size=_global(db, "batch_size"),
+    )
     db.add(child)
     db.commit()
     return {"id": child.id, "name": child.name, "round": child.round or 1, "access_code": child.access_code}
@@ -132,7 +154,9 @@ def _annotate_history(q_answers, points_per_clear, current_round: int = 1):
     return history
 
 
-def _get_points_per_clear(db: Session) -> float:
+def _get_points_per_clear(db: Session, child_id: int | None = None) -> float:
+    if child_id is not None:
+        return float(get_child_setting_by_id(db, child_id, "points_per_clear"))
     s = db.query(Setting).get("points_per_clear")
     try:
         return float(s.value) if s else 2
@@ -168,7 +192,7 @@ def get_progress(child_id: int, db: Session = Depends(get_db)):
     current_round = _get_round(db, child_id)
     questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
     answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
-    ppc = _get_points_per_clear(db)
+    ppc = _get_points_per_clear(db, child_id)
 
     # Group answers by question
     answer_map: dict[int, list] = {}
@@ -219,10 +243,12 @@ def _session_response(session: ActiveSession, questions: list[Question], resumed
 
 
 @router.get("/{child_id}/batch")
-def get_batch(child_id: int, size: int = 10, db: Session = Depends(get_db)):
+def get_batch(child_id: int, size: int | None = None, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
+    if size is None:
+        size = int(get_child_setting(db, child, "batch_size"))
 
     cleared = _get_cleared_set(db, child_id)
     awaiting = _get_awaiting_parent_set(db, child_id)
@@ -324,7 +350,7 @@ def get_question_detail(child_id: int, question_id: int, db: Session = Depends(g
         .all()
     )
     current_round = _get_round(db, child_id)
-    history = _annotate_history(answers, _get_points_per_clear(db), current_round)
+    history = _annotate_history(answers, _get_points_per_clear(db, child_id), current_round)
 
     # この子供のこの問題に対する全 grading（AIコメント＋チャット履歴）
     gradings = (
@@ -463,7 +489,7 @@ def get_timeline(limit: int = 100, db: Session = Depends(get_db)):
 
     # クリア判定のため、子供ごとのラウンドと全解答を取得
     children = {c.id: c for c in db.query(Child).all()}
-    ppc = _get_points_per_clear(db)
+    ppc_by_child = {cid: float(get_child_setting(db, c, "points_per_clear")) for cid, c in children.items()}
 
     # 子供×問題×ラウンドご��の累計を事前計算（クリア判定用）
     all_answers = (
@@ -504,7 +530,7 @@ def get_timeline(limit: int = 100, db: Session = Depends(get_db)):
             "japanese": question.japanese,
             "correct": answer.correct,
             "cleared": cleared,
-            "points_earned": ppc if cleared else 0,
+            "points_earned": ppc_by_child.get(child.id, 0) if cleared else 0,
         })
 
     return result

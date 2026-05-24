@@ -1515,22 +1515,36 @@
     </div>
 
     <div class="card" style="margin-bottom:24px;">
-      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント・交換レート（全員共通）</div>
-      <div class="config-row">
-        <span class="config-label">1問クリア</span>
-        <input type="number" class="config-input" x-model.number="pointsPerClear" min="0.1" step="0.1" @change="saveSettings()">
-        <span style="font-size:13px; color:var(--text-sub)">pt</span>
-      </div>
-      <div class="config-row">
-        <span class="config-label">1pt → お金</span>
-        <input type="number" class="config-input" x-model.number="exchangeRates.money" min="0.1" step="0.1" @change="saveSettings()">
-        <span style="font-size:13px; color:var(--text-sub)">円</span>
-      </div>
-      <div class="config-row" style="margin-bottom:0;">
-        <span class="config-label">1pt → スマホ</span>
-        <input type="number" class="config-input" x-model.number="exchangeRates.phone" min="0.1" step="0.1" @change="saveSettings()">
-        <span style="font-size:13px; color:var(--text-sub)">分</span>
-      </div>
+      <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">ポイント・交換レート・出題数（子供ごと）</div>
+      <template x-for="c in children" :key="'cs'+c.id">
+        <div style="padding:10px 0; border-bottom:1px solid var(--border-light);">
+          <div style="font-weight:600; font-size:14px; margin-bottom:8px;" x-text="c.name"></div>
+          <div class="config-row">
+            <span class="config-label">1問クリア</span>
+            <input type="number" class="config-input" :value="c.points_per_clear" min="0.1" step="0.1"
+              @change="saveChildSettings(c.id, { points_per_clear: parseFloat($event.target.value) })">
+            <span style="font-size:13px; color:var(--text-sub)">pt</span>
+          </div>
+          <div class="config-row">
+            <span class="config-label">1pt → お金</span>
+            <input type="number" class="config-input" :value="c.exchange_rate_money" min="0.1" step="0.1"
+              @change="saveChildSettings(c.id, { exchange_rate_money: parseFloat($event.target.value) })">
+            <span style="font-size:13px; color:var(--text-sub)">円</span>
+          </div>
+          <div class="config-row">
+            <span class="config-label">1pt → スマホ</span>
+            <input type="number" class="config-input" :value="c.exchange_rate_phone" min="0.1" step="0.1"
+              @change="saveChildSettings(c.id, { exchange_rate_phone: parseFloat($event.target.value) })">
+            <span style="font-size:13px; color:var(--text-sub)">分</span>
+          </div>
+          <div class="config-row" style="margin-bottom:0;">
+            <span class="config-label">出題数</span>
+            <input type="number" class="config-input" :value="c.batch_size" min="1" max="50"
+              @change="saveChildSettings(c.id, { batch_size: parseInt($event.target.value) })">
+            <span style="font-size:13px; color:var(--text-sub)">問</span>
+          </div>
+        </div>
+      </template>
     </div>
 
     <div class="card" style="margin-bottom:24px;">
@@ -1690,6 +1704,7 @@ function app() {
     historyFilter: 'all',
     exchangeRates: { money: 10, phone: 10 },
     pointsPerClear: 2,
+    globalSettings: null,
     kidLocked: false,
     newChildName: '',
     parentMode: false,
@@ -1830,11 +1845,25 @@ function app() {
     },
 
     async loadSettings() {
+      // グローバル既定（新規子供作成時に使う値）
       const s = await this.api('/api/settings');
-      this.exchangeRates.money = s.exchange_rate_money;
-      this.exchangeRates.phone = s.exchange_rate_phone;
-      this.pointsPerClear = s.points_per_clear;
-      this.batchSize = s.batch_size;
+      this.globalSettings = s;
+      this.syncCurrentChildSettings();
+    },
+
+    syncCurrentChildSettings() {
+      const c = this.children.find(c => c.id == this.currentChildId);
+      if (c && c.points_per_clear != null) {
+        this.exchangeRates.money = c.exchange_rate_money;
+        this.exchangeRates.phone = c.exchange_rate_phone;
+        this.pointsPerClear = c.points_per_clear;
+        this.batchSize = c.batch_size;
+      } else if (this.globalSettings) {
+        this.exchangeRates.money = this.globalSettings.exchange_rate_money;
+        this.exchangeRates.phone = this.globalSettings.exchange_rate_phone;
+        this.pointsPerClear = this.globalSettings.points_per_clear;
+        this.batchSize = this.globalSettings.batch_size;
+      }
     },
 
     async loadChildData() {
@@ -1884,6 +1913,7 @@ function app() {
       this.scoring = {};
       this.exchangeMoney = null;
       this.exchangePhone = null;
+      this.syncCurrentChildSettings();
       await this.loadChildData();
       await this.checkSession();
     },
@@ -2764,7 +2794,9 @@ function app() {
     },
 
     async saveSettings() {
-      await this.api('/api/settings', {
+      // 現在の子供の設定を保存
+      if (!this.currentChildId) return;
+      const updated = await this.api(`/api/children/${this.currentChildId}/settings`, {
         method: 'PUT',
         body: JSON.stringify({
           exchange_rate_money: this.exchangeRates.money,
@@ -2773,6 +2805,29 @@ function app() {
           batch_size: this.batchSize,
         }),
       });
+      // children 配列のキャッシュも更新
+      const c = this.children.find(c => c.id == this.currentChildId);
+      if (c) {
+        c.exchange_rate_money = updated.exchange_rate_money;
+        c.exchange_rate_phone = updated.exchange_rate_phone;
+        c.points_per_clear = updated.points_per_clear;
+        c.batch_size = updated.batch_size;
+      }
+    },
+
+    async saveChildSettings(childId, patch) {
+      const updated = await this.api(`/api/children/${childId}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify(patch),
+      });
+      const c = this.children.find(c => c.id == childId);
+      if (c) {
+        c.exchange_rate_money = updated.exchange_rate_money;
+        c.exchange_rate_phone = updated.exchange_rate_phone;
+        c.points_per_clear = updated.points_per_clear;
+        c.batch_size = updated.batch_size;
+      }
+      if (childId == this.currentChildId) this.syncCurrentChildSettings();
     },
 
     async updateChildName(childId, newName) {

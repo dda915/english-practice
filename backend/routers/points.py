@@ -6,6 +6,7 @@ from ..database import get_db, now_jst
 from ..models import PointLog, Child, Setting, ExchangeRequest
 from ..mail import send_exchange_notification
 from ..backup import backup_to_dropbox
+from .settings import get_child_setting
 
 router = APIRouter(prefix="/api/children", tags=["points"])
 
@@ -83,11 +84,9 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
     if body.amount > available:
         raise HTTPException(400, "ポイントが足りません")
 
-    # Get exchange rates
-    money_rate = db.query(Setting).get("exchange_rate_money")
-    phone_rate = db.query(Setting).get("exchange_rate_phone")
-    money_val = float(money_rate.value) if money_rate else 10
-    phone_val = float(phone_rate.value) if phone_rate else 10
+    # Get exchange rates (子供ごと → 無ければグローバル)
+    money_val = float(get_child_setting(db, child, "exchange_rate_money"))
+    phone_val = float(get_child_setting(db, child, "exchange_rate_phone"))
 
     if body.type == "money":
         converted = body.amount * money_val

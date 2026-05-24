@@ -23,6 +23,10 @@ class Child(Base):
     stage = Column(Integer, nullable=False, default=1)  # deprecated, use round
     round = Column(Integer, nullable=False, default=1)
     access_code = Column(Text, nullable=True, unique=True)
+    points_per_clear = Column(Float, nullable=True)
+    exchange_rate_money = Column(Float, nullable=True)
+    exchange_rate_phone = Column(Float, nullable=True)
+    batch_size = Column(Integer, nullable=True)
 
     answers = relationship("Answer", back_populates="child")
     point_logs = relationship("PointLog", back_populates="child")
