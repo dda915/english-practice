@@ -108,6 +108,46 @@ def _ensure_photo_batch_id():
         print(f"Migration in seed (photo batch_id): {e}")
 
 
+def _ensure_child_settings_columns():
+    """子供ごと設定: points_per_clear / exchange_rate_money / exchange_rate_phone / batch_size"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "children" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+            if "points_per_clear" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN points_per_clear REAL")
+            if "exchange_rate_money" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN exchange_rate_money REAL")
+            if "exchange_rate_phone" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN exchange_rate_phone REAL")
+            if "batch_size" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN batch_size INTEGER")
+            conn.commit()
+
+            defaults = {
+                "points_per_clear": ("REAL", 2.0),
+                "exchange_rate_money": ("REAL", 10.0),
+                "exchange_rate_phone": ("REAL", 10.0),
+                "batch_size": ("INTEGER", 10),
+            }
+            for key, (sql_type, fallback) in defaults.items():
+                row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+                if row:
+                    try:
+                        val = float(row[0]) if sql_type == "REAL" else int(float(row[0]))
+                    except (ValueError, TypeError):
+                        val = fallback
+                else:
+                    val = fallback
+                conn.execute(f"UPDATE children SET {key} = ? WHERE {key} IS NULL", (val,))
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration in seed (child settings): {e}")
+
+
 def _ensure_round_columns():
     """ラウンド制: children.round と answers.round カラムがなければ追加"""
     try:
@@ -134,6 +174,7 @@ def seed():
     _ensure_access_code_column()
     _ensure_photo_batch_id()
     _ensure_round_columns()
+    _ensure_child_settings_columns()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
