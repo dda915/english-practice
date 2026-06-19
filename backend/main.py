@@ -138,33 +138,59 @@ def _seed_gag_questions():
         print(f"Seed warning (gag questions): {e}")
 
 
-# 韓国語編の初歩スターター問題（あいさつ・基本表現）。
-# 韓国語編がまだ空のときだけ投入し、保護者が問題を入れた後は上書きしない。
+# 韓国語編の初歩スターター問題。
+# めちゃくちゃ優しい「ひとこと単語」から、少しずつあいさつ・短い表現へ。
+# unit_number = 難易度ステージ（小さいほど先に出題される）。
+# (number, unit_number, 和文, 模範解答[韓国語])
 KO_STARTER_QUESTIONS = [
-    (1, "こんにちは。", "안녕하세요."),
-    (2, "ありがとうございます。", "감사합니다."),
-    (3, "はい。", "네."),
-    (4, "いいえ。", "아니요."),
-    (5, "すみません。", "죄송합니다."),
-    (6, "さようなら。（去る人に）", "안녕히 가세요."),
-    (7, "はじめまして。", "처음 뵙겠습니다."),
-    (8, "私は学生です。", "저는 학생이에요."),
-    (9, "お名前は何ですか？", "이름이 뭐예요?"),
-    (10, "これは何ですか？", "이게 뭐예요?"),
-    (11, "おいしいです。", "맛있어요."),
-    (12, "水をください。", "물 주세요."),
-    (13, "いくらですか？", "얼마예요?"),
-    (14, "わかりました。", "알겠어요."),
-    (15, "大丈夫です。", "괜찮아요."),
-    (16, "また会いましょう。", "또 만나요."),
-    (17, "トイレはどこですか？", "화장실이 어디예요?"),
-    (18, "私は日本人です。", "저는 일본 사람이에요."),
-    (19, "とても楽しいです。", "정말 재미있어요."),
-    (20, "明日また来ます。", "내일 또 올게요."),
+    # ── ステージ1: ちょー基本の ひとこと たんご ──
+    (1, 1.0, "水", "물"),
+    (2, 1.0, "山", "산"),
+    (3, 1.0, "木", "나무"),
+    (4, 1.0, "空", "하늘"),
+    (5, 1.0, "犬", "개"),
+    (6, 1.0, "猫", "고양이"),
+    (7, 1.0, "本", "책"),
+    (8, 1.0, "家", "집"),
+    (9, 1.0, "手", "손"),
+    (10, 1.0, "目", "눈"),
+    # ── ステージ2: みぢかな たんご ──
+    (11, 2.0, "りんご", "사과"),
+    (12, 2.0, "牛乳", "우유"),
+    (13, 2.0, "パン", "빵"),
+    (14, 2.0, "学校", "학교"),
+    (15, 2.0, "先生", "선생님"),
+    (16, 2.0, "友だち", "친구"),
+    (17, 2.0, "お母さん", "엄마"),
+    (18, 2.0, "お父さん", "아빠"),
+    (19, 2.0, "わたし", "저"),
+    (20, 2.0, "お金", "돈"),
+    # ── ステージ3: はい・いいえ／ひとこと ──
+    (21, 3.0, "はい", "네"),
+    (22, 3.0, "いいえ", "아니요"),
+    (23, 3.0, "おいしい", "맛있어요"),
+    (24, 3.0, "だいじょうぶ", "괜찮아요"),
+    (25, 3.0, "わかった", "알겠어요"),
+    # ── ステージ4: みじかい あいさつ ──
+    (26, 4.0, "こんにちは", "안녕하세요"),
+    (27, 4.0, "ありがとう", "감사합니다"),
+    (28, 4.0, "ごめんなさい", "죄송합니다"),
+    (29, 4.0, "さようなら（去る人に）", "안녕히 가세요"),
+    (30, 4.0, "また会おう", "또 만나요"),
 ]
+
+# スターター問題セットのバージョン。内容を変えたら +1 する。
+# 起動時、旧バージョンの自動投入セットが「まだ未解答」なら新セットに置き換える。
+KO_STARTER_VERSION = 2
 
 
 def _seed_ko_starter_questions():
+    """韓国語編の初歩スターター問題を投入/更新する。
+    - 韓国語編が空 → 投入。
+    - 旧バージョンの自動投入セットがあり、まだ誰も解答・採点していない →
+      新しいセットへ安全に入れ替える。
+    - すでに解答/採点がある（＝学習が始まっている）→ 保護のため何もしない。
+    """
     try:
         db_path = DATABASE_URL.replace("sqlite:///", "")
         conn = sqlite3.connect(db_path)
@@ -172,15 +198,60 @@ def _seed_ko_starter_questions():
         if "language" not in cols:
             conn.close()
             return  # language 移行前なら何もしない
-        cnt = conn.execute("SELECT COUNT(*) FROM questions WHERE language = 'ko'").fetchone()[0]
-        if cnt == 0:
-            for num, jp, ko in KO_STARTER_QUESTIONS:
+
+        def get_ver():
+            row = conn.execute("SELECT value FROM settings WHERE key='ko_starter_version'").fetchone()
+            try:
+                return int(row[0]) if row else 0
+            except (ValueError, TypeError):
+                return 0
+
+        def set_ver(v):
+            if conn.execute("SELECT 1 FROM settings WHERE key='ko_starter_version'").fetchone():
+                conn.execute("UPDATE settings SET value=? WHERE key='ko_starter_version'", (str(v),))
+            else:
+                conn.execute("INSERT INTO settings (key, value) VALUES ('ko_starter_version', ?)", (str(v),))
+
+        def insert_all():
+            for num, unit, jp, ko in KO_STARTER_QUESTIONS:
                 conn.execute(
                     "INSERT INTO questions (number, unit_number, japanese, english, language) VALUES (?, ?, ?, ?, 'ko')",
-                    (num, 1.0, jp, ko),
+                    (num, unit, jp, ko),
                 )
+
+        ko_count = conn.execute("SELECT COUNT(*) FROM questions WHERE language='ko'").fetchone()[0]
+
+        if ko_count == 0:
+            insert_all()
+            set_ver(KO_STARTER_VERSION)
             print(f"[seed ko] 韓国語編の初歩問題 {len(KO_STARTER_QUESTIONS)} 問を追加しました")
             conn.commit()
+            conn.close()
+            return
+
+        if get_ver() < KO_STARTER_VERSION:
+            ko_ids = [r[0] for r in conn.execute("SELECT id FROM questions WHERE language='ko'").fetchall()]
+            qmarks = ",".join("?" * len(ko_ids))
+            has_ans = conn.execute(f"SELECT 1 FROM answers WHERE question_id IN ({qmarks}) LIMIT 1", ko_ids).fetchone()
+            has_grad = conn.execute(f"SELECT 1 FROM gradings WHERE question_id IN ({qmarks}) LIMIT 1", ko_ids).fetchone()
+            if has_ans or has_grad:
+                # 学習が始まっているのでデータ保護を優先し、自動入れ替えはしない
+                print("[seed ko] 既に解答/採点があるため初歩問題の自動入れ替えをスキップしました")
+                conn.close()
+                return
+            # まだ未解答 → 安全に入れ替え（進行中の ko セッションも掃除）
+            try:
+                conn.execute("DELETE FROM active_sessions WHERE language='ko'")
+            except Exception:
+                pass
+            conn.execute(f"DELETE FROM questions WHERE id IN ({qmarks})", ko_ids)
+            insert_all()
+            set_ver(KO_STARTER_VERSION)
+            print(f"[seed ko] 韓国語編の初歩問題を新しい優しいセット({len(KO_STARTER_QUESTIONS)}問)に入れ替えました")
+            conn.commit()
+            conn.close()
+            return
+
         conn.close()
     except Exception as e:
         print(f"Seed warning (ko starter questions): {e}")
