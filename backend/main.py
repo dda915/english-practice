@@ -128,7 +128,7 @@ def _seed_gag_questions():
             if row:
                 continue
             conn.execute(
-                "INSERT INTO questions (number, unit_number, japanese, english) VALUES (?, ?, ?, ?)",
+                "INSERT INTO questions (number, unit_number, japanese, english, language) VALUES (?, ?, ?, ?, 'en')",
                 (num, GAG_UNIT_NUMBER, jp, en),
             )
             print(f"[seed gag] 問{num} を追加しました")
@@ -136,6 +136,54 @@ def _seed_gag_questions():
         conn.close()
     except Exception as e:
         print(f"Seed warning (gag questions): {e}")
+
+
+# 韓国語編の初歩スターター問題（あいさつ・基本表現）。
+# 韓国語編がまだ空のときだけ投入し、保護者が問題を入れた後は上書きしない。
+KO_STARTER_QUESTIONS = [
+    (1, "こんにちは。", "안녕하세요."),
+    (2, "ありがとうございます。", "감사합니다."),
+    (3, "はい。", "네."),
+    (4, "いいえ。", "아니요."),
+    (5, "すみません。", "죄송합니다."),
+    (6, "さようなら。（去る人に）", "안녕히 가세요."),
+    (7, "はじめまして。", "처음 뵙겠습니다."),
+    (8, "私は学生です。", "저는 학생이에요."),
+    (9, "お名前は何ですか？", "이름이 뭐예요?"),
+    (10, "これは何ですか？", "이게 뭐예요?"),
+    (11, "おいしいです。", "맛있어요."),
+    (12, "水をください。", "물 주세요."),
+    (13, "いくらですか？", "얼마예요?"),
+    (14, "わかりました。", "알겠어요."),
+    (15, "大丈夫です。", "괜찮아요."),
+    (16, "また会いましょう。", "또 만나요."),
+    (17, "トイレはどこですか？", "화장실이 어디예요?"),
+    (18, "私は日本人です。", "저는 일본 사람이에요."),
+    (19, "とても楽しいです。", "정말 재미있어요."),
+    (20, "明日また来ます。", "내일 또 올게요."),
+]
+
+
+def _seed_ko_starter_questions():
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(questions)")]
+        if "language" not in cols:
+            conn.close()
+            return  # language 移行前なら何もしない
+        cnt = conn.execute("SELECT COUNT(*) FROM questions WHERE language = 'ko'").fetchone()[0]
+        if cnt == 0:
+            for num, jp, ko in KO_STARTER_QUESTIONS:
+                conn.execute(
+                    "INSERT INTO questions (number, unit_number, japanese, english, language) VALUES (?, ?, ?, ?, 'ko')",
+                    (num, 1.0, jp, ko),
+                )
+            print(f"[seed ko] 韓国語編の初歩問題 {len(KO_STARTER_QUESTIONS)} 問を追加しました")
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Seed warning (ko starter questions): {e}")
 
 
 def _migrate_child_settings_cols():
@@ -311,6 +359,7 @@ _migrate_child_round_ko()
 _migrate_session_language()
 Base.metadata.create_all(bind=engine)
 _seed_gag_questions()
+_seed_ko_starter_questions()
 
 app = FastAPI(title="和文英訳トレーニング")
 
