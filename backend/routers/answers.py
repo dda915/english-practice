@@ -32,32 +32,45 @@ def _is_cleared(db: Session, child_id: int, question_id: int, current_round: int
     return correct > wrong
 
 
+def _round_for_question(child: Child, q: Question) -> int:
+    """問題の言語に応じたラウンド番号を返す"""
+    if getattr(q, "language", "en") == "ko":
+        return child.round_ko or 1
+    return child.round or 1
+
+
 @router.post("/{child_id}/answers")
 def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
-    current_round = child.round or 1
     now = now_jst()
     today = now.date()
 
-    # Check which questions were cleared BEFORE recording
-    was_cleared = {}
-    for item in body.answers:
-        was_cleared[item.question_id] = _is_cleared(db, child_id, item.question_id, current_round)
-
-    # Record answers
+    # 問題を事前取得し、言語ごとのラウンドを決定
+    q_map: dict[int, Question] = {}
+    round_map: dict[int, int] = {}
     for item in body.answers:
         q = db.query(Question).get(item.question_id)
         if not q:
             raise HTTPException(400, f"問題ID {item.question_id} が見つかりません")
+        q_map[item.question_id] = q
+        round_map[item.question_id] = _round_for_question(child, q)
+
+    # Check which questions were cleared BEFORE recording
+    was_cleared = {}
+    for item in body.answers:
+        was_cleared[item.question_id] = _is_cleared(db, child_id, item.question_id, round_map[item.question_id])
+
+    # Record answers
+    for item in body.answers:
         db.add(Answer(
             child_id=child_id,
             question_id=item.question_id,
             answered_date=now,
             correct=item.correct,
-            round=current_round,
+            round=round_map[item.question_id],
         ))
 
     db.flush()
@@ -65,9 +78,8 @@ def submit_answers(child_id: int, body: AnswersSubmit, db: Session = Depends(get
     # Check newly cleared
     newly_cleared = []
     for item in body.answers:
-        if not was_cleared[item.question_id] and _is_cleared(db, child_id, item.question_id, current_round):
-            q = db.query(Question).get(item.question_id)
-            newly_cleared.append(q)
+        if not was_cleared[item.question_id] and _is_cleared(db, child_id, item.question_id, round_map[item.question_id]):
+            newly_cleared.append(q_map[item.question_id])
 
     # Award points for newly cleared
     if newly_cleared:

@@ -918,7 +918,7 @@
 <!-- Nav -->
 <nav class="nav no-print">
   <div class="nav-inner">
-    <div class="nav-title">&#x1F4D6; &#x548C;&#x6587;&#x82F1;&#x8A33;</div>
+    <div class="nav-title">&#x1F4D6; <span x-text="lang === 'ko' ? '和文韓訳' : '和文英訳'"></span></div>
     <div class="nav-tabs">
       <div class="nav-tab" :class="tab === 'practice' && 'active'" @click="tab = 'practice'; checkPapaMessages(); checkActiveBonus()">
         <span class="tab-icon">&#x270F;&#xFE0F;</span>出題
@@ -957,6 +957,15 @@
 </nav>
 
 <div class="main">
+
+  <!-- ══ 編（言語）切替 ══ -->
+  <div class="no-print" x-show="['practice','scoring','history','admin'].includes(tab)"
+       style="display:flex; gap:8px; justify-content:center; margin:14px 0 4px;">
+    <button class="btn btn-sm" :class="lang === 'en' ? 'btn-primary' : 'btn-outline'"
+            @click="if(lang!=='en'){ lang='en'; switchLang(); }">&#x1F1FA;&#x1F1F8; 英語編</button>
+    <button class="btn btn-sm" :class="lang === 'ko' ? 'btn-primary' : 'btn-outline'"
+            @click="if(lang!=='ko'){ lang='ko'; switchLang(); }">&#x1F1F0;&#x1F1F7; 韓国語編</button>
+  </div>
 
   <!-- ══ Practice ══ -->
   <div x-show="tab === 'practice'" class="fade-in">
@@ -1136,6 +1145,9 @@
             <div class="swipe-qjp" x-text="q.japanese"></div>
             <div class="gag-note" x-show="q.unit_number == 999">
               <span class="pin">&#x1F4CC;</span>英語ではなく日本語で答えてね
+            </div>
+            <div class="gag-note" x-show="q.unit_number != 999 && lang === 'ko'" style="background:#eef5ff; border-color:#9bbcf0; color:#2a5599;">
+              <span class="pin">&#x1F1F0;&#x1F1F7;</span>韓国語（ハングル）で答えてね
             </div>
           </div>
         </template>
@@ -1573,7 +1585,7 @@
                 @change="updateChildName(c.id, $event.target.value)">
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <span class="child-card-round">ラウンド <span x-text="c.round || 1"></span></span>
+              <span class="child-card-round" x-text="editionLabel + ' ラウンド ' + (lang === 'ko' ? (c.round_ko || 1) : (c.round || 1))"></span>
               <button class="btn btn-outline btn-sm" @click="startNewRound(c.id, c.name)"
                 style="color:var(--accent); border-color:var(--accent); padding:4px 10px;">復習開始</button>
             </div>
@@ -1748,8 +1760,8 @@
       </div>
 
       <div class="card" style="margin-bottom:16px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">CSVインポート</div>
-        <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;">カラム構成: 問題番号, 和文, 模範英訳</p>
+        <div style="font-size:13px; font-weight:600; color:var(--text-sub); margin-bottom:12px;">CSVインポート <span x-text="'（' + editionLabel + 'へ取り込み）'" style="color:var(--accent);"></span></div>
+        <p style="font-size:12px; color:var(--text-sub); margin-bottom:12px;" x-text="lang === 'ko' ? 'カラム構成: 問題番号, 和文, 模範韓国語訳' : 'カラム構成: 問題番号, 和文, 模範英訳'"></p>
         <div class="csv-import-area"
           @click="$refs.csvInput.click()"
           @dragover.prevent="$event.currentTarget.classList.add('dragover')"
@@ -1774,6 +1786,7 @@ function app() {
   return {
     tab: 'practice',
     adminSubTab: 'activity',
+    lang: 'en',  // 'en' = 英語編 / 'ko' = 韓国語編
     loading: false,
     questions: [],
     children: [],
@@ -1866,6 +1879,9 @@ function app() {
         localStorage.setItem('deviceId', did);
       }
       this.myDeviceId = did;
+      // 編（言語）の復元
+      const savedLang = localStorage.getItem('lang');
+      if (savedLang === 'ko' || savedLang === 'en') this.lang = savedLang;
       try {
         const r = await this.api('/api/parent-devices/check', { method: 'POST', body: JSON.stringify({ device_id: did }) });
         if (r.registered) {
@@ -1939,7 +1955,28 @@ function app() {
     },
 
     async loadQuestions() {
-      this.questions = await this.api('/api/questions');
+      this.questions = await this.api(`/api/questions?language=${this.lang}`);
+    },
+
+    get editionLabel() {
+      return this.lang === 'ko' ? '韓国語編' : '英語編';
+    },
+
+    async switchLang() {
+      localStorage.setItem('lang', this.lang);
+      this.currentBatch = [];
+      this.currentSessionId = null;
+      this.cardIndex = 0;
+      this.photos = [];
+      this.gradings = [];
+      this.resultIndex = 0;
+      this.scoring = {};
+      await this.loadQuestions();
+      if (this.currentChildId) {
+        await this.loadChildData();
+        await this.checkSession();
+        await this.loadAllSummaries();
+      }
     },
 
     async loadChildren() {
@@ -1974,7 +2011,7 @@ function app() {
     async loadChildData() {
       if (!this.currentChildId) return;
       const [progress, points, requests] = await Promise.all([
-        this.api(`/api/children/${this.currentChildId}/progress`),
+        this.api(`/api/children/${this.currentChildId}/progress?language=${this.lang}`),
         this.api(`/api/children/${this.currentChildId}/points`),
         this.api('/api/children/exchange-requests'),
       ]);
@@ -1995,7 +2032,7 @@ function app() {
     async loadAllSummaries() {
       for (const c of this.children) {
         const [progress, points] = await Promise.all([
-          this.api(`/api/children/${c.id}/progress`),
+          this.api(`/api/children/${c.id}/progress?language=${this.lang}`),
           this.api(`/api/children/${c.id}/points`),
         ]);
         const cleared = progress.filter(p => p.cleared).length;
@@ -2025,7 +2062,7 @@ function app() {
 
     async checkSession() {
       if (!this.currentChildId) return;
-      const session = await this.api(`/api/children/${this.currentChildId}/session`);
+      const session = await this.api(`/api/children/${this.currentChildId}/session?language=${this.lang}`);
       if (session.active && session.remaining > 0) {
         this.hasActiveSession = true;
         this.sessionRemaining = session.remaining;
@@ -2043,7 +2080,7 @@ function app() {
       this.loading = true;
       await this.loadSettings();
       try {
-        const res = await this.api(`/api/children/${this.currentChildId}/batch?size=${this.batchSize}`);
+        const res = await this.api(`/api/children/${this.currentChildId}/batch?size=${this.batchSize}&language=${this.lang}`);
         this.currentBatch = res.questions || [];
         this.currentSessionId = res.session_id || null;
         this.cardIndex = 0;
@@ -2480,12 +2517,12 @@ function app() {
     },
 
     async startNewRound(childId, childName) {
-      if (!confirm(`${childName} の復習を開始しますか？\n全問が未クリアに戻り、ラウンドが1つ進みます。\n（過去の解答履歴はそのまま残ります）`)) return;
+      if (!confirm(`${childName} の【${this.editionLabel}】の復習を開始しますか？\n全問が未クリアに戻り、ラウンドが1つ進みます。\n（過去の解答履歴はそのまま残ります）`)) return;
       try {
-        const result = await this.api(`/api/children/${childId}/new-round`, { method: 'POST' });
+        const result = await this.api(`/api/children/${childId}/new-round?language=${this.lang}`, { method: 'POST' });
         const c = this.children.find(c => c.id === childId);
-        if (c) c.round = result.round;
-        this.showToast(`${result.name} のラウンド${result.round}を開始しました`);
+        if (c) { if (this.lang === 'ko') c.round_ko = result.round; else c.round = result.round; }
+        this.showToast(`${result.name} の${this.editionLabel} ラウンド${result.round}を開始しました`);
         await this.loadChildData();
         await this.loadAllSummaries();
       } catch (e) {
@@ -2526,7 +2563,7 @@ function app() {
 
     async resetSession() {
       if (!confirm('今のセッションをリセットして、新しい問題を出しますか？')) return;
-      await this.api(`/api/children/${this.currentChildId}/session`, { method: 'DELETE' });
+      await this.api(`/api/children/${this.currentChildId}/session?language=${this.lang}`, { method: 'DELETE' });
       this.hasActiveSession = false;
       this.currentBatch = [];
       this.currentSessionId = null;
@@ -2761,7 +2798,7 @@ function app() {
     async closeSummary() {
       // セッション終了処理
       try {
-        await this.api(`/api/children/${this.currentChildId}/session`, { method: 'DELETE' });
+        await this.api(`/api/children/${this.currentChildId}/session?language=${this.lang}`, { method: 'DELETE' });
       } catch (e) {}
       this.showSummary = false;
       this.gradings = [];
@@ -2827,7 +2864,7 @@ function app() {
 
         this.scoring = {};
         this.currentBatch = [];
-        await this.api(`/api/children/${this.currentChildId}/session`, { method: 'DELETE' });
+        await this.api(`/api/children/${this.currentChildId}/session?language=${this.lang}`, { method: 'DELETE' });
         this.hasActiveSession = false;
         await this.loadChildData();
         await this.loadAllSummaries();
@@ -2986,7 +3023,7 @@ function app() {
       const formData = new FormData();
       formData.append('file', file);
       try {
-        const res = await fetch('/api/questions/import', {
+        const res = await fetch(`/api/questions/import?language=${this.lang}`, {
           method: 'POST',
           body: formData,
         });

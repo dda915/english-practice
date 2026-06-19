@@ -1,16 +1,19 @@
-from sqlalchemy import Column, Integer, Float, Text, Boolean, Date, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, Text, Boolean, Date, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 
 
 class Question(Base):
     __tablename__ = "questions"
+    # 番号は言語ごとに独立（英語編の問1 と 韓国語編の問1 は別物）
+    __table_args__ = (UniqueConstraint("language", "number", name="uq_question_language_number"),)
 
     id = Column(Integer, primary_key=True)
     unit_number = Column(Float, nullable=False, default=0, index=True)
-    number = Column(Integer, nullable=False, unique=True, index=True)
+    number = Column(Integer, nullable=False, index=True)
     japanese = Column(Text, nullable=False)
-    english = Column(Text, nullable=False)
+    english = Column(Text, nullable=False)  # 模範解答（英語編=英語 / 韓国語編=韓国語）
+    language = Column(Text, nullable=False, default="en", index=True)  # 'en' | 'ko'
 
     answers = relationship("Answer", back_populates="question")
 
@@ -21,7 +24,8 @@ class Child(Base):
     id = Column(Integer, primary_key=True)
     name = Column(Text, nullable=False)
     stage = Column(Integer, nullable=False, default=1)  # deprecated, use round
-    round = Column(Integer, nullable=False, default=1)
+    round = Column(Integer, nullable=False, default=1)  # 英語編のラウンド
+    round_ko = Column(Integer, nullable=False, default=1)  # 韓国語編のラウンド
     access_code = Column(Text, nullable=True, unique=True)
     points_per_clear = Column(Float, nullable=True)
     exchange_rate_money = Column(Float, nullable=True)
@@ -67,10 +71,13 @@ class Setting(Base):
 
 class ActiveSession(Base):
     __tablename__ = "active_sessions"
+    # 子供は言語ごとに1つの進行中セッションを持てる
+    __table_args__ = (UniqueConstraint("child_id", "language", name="uq_session_child_language"),)
 
     id = Column(Integer, primary_key=True)
-    child_id = Column(Integer, ForeignKey("children.id"), nullable=False, unique=True, index=True)
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=False, index=True)
     question_ids = Column(Text, nullable=False)  # JSON array of question IDs
+    language = Column(Text, nullable=False, default="en")  # 'en' | 'ko'
 
     child = relationship("Child")
 

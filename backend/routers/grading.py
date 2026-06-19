@@ -49,6 +49,56 @@ def _guess_media_type(path: Path) -> str:
 
 
 def _build_prompt(questions: list[Question]) -> str:
+    # バッチは単一言語。韓国語編なら専用プロンプトを使う。
+    lang = "en"
+    for q in questions:
+        if getattr(q, "language", "en") == "ko":
+            lang = "ko"
+            break
+    if lang == "ko":
+        return _build_prompt_ko(questions)
+    return _build_prompt_en(questions)
+
+
+def _build_prompt_ko(questions: list[Question]) -> str:
+    lines = [
+        "あなたは小学生の韓国語学習を支援する優しい先生です。",
+        "添付された画像は、和文韓国語訳（日本語を韓国語＝ハングルに翻訳する）の答案をノートに手書きしたものです。",
+        "以下の問題について、画像から手書きのハングルを読み取り、模範解答（韓国語）と比較して採点してください。",
+        "",
+        "【問題一覧】",
+    ]
+    for q in questions:
+        lines.append(f"- 問{q.number}: 和文「{q.japanese}」 / 模範解答（韓国語）「{q.english}」")
+    lines += [
+        "",
+        "【採点基準】厳しめに採点してください。",
+        "- 答案は「ハングルのみ」で書かれているべきです。日本語（ひらがな・カタカナ・漢字）・英語・ローマ字が混ざっている場合は必ず×。和文の一部を日本語のまま書いていたり、訳し忘れているのも×。",
+        "- 和文の意味を韓国語で完全に表現できていなければ×。和文の一部（時間表現・目的語・修飾語など）を訳し忘れているのも×。",
+        "- 【助詞（조사）の誤り】은/는・이/가・을/를・에/에서・와/과・로/으로 などの助詞の取り違えや抜けは、意味・文法に関わる誤りなので×。特にパッチム（받침）の有無で形が変わる助詞（이/가, 은/는, 을/를, 와/과, 으로/로）の選択ミスに注意して指摘すること。",
+        "- スペルミス（字母の取り違え）、パッチム（받침）の付け忘れ・余分、てにをはに相当する語尾の誤り、時制の誤りなど、意味や文法に関わる誤りは全て×。",
+        "- 【分かち書き（띄어쓰기）】単語間のスペースの誤りは、読み取りが難しいことも多いため、意味が明確に取れる場合は軽微なものとしてコメントで指摘しつつ○にしてよい。ただし分かち書きの誤りで意味が変わる・読めない場合は×。",
+        "- 【文体（존댓말/반말）】語尾の丁寧さ（〜요体／〜ㅂ니다体／〜한다体）が模範解答と多少違っても、韓国語として正しく和文の意味を伝えていれば○にしてよい（コメントで触れる程度）。明らかに不自然・非文な語尾は×。",
+        "- 【例外1：人名・固有名詞のスペルミス】登場人物の名前など固有名詞の表記揺れは、コメントで「○○の書き方が違うよ」と指摘するが、判定は○にしてよい。",
+        "- 【例外2：模範解答と違っても韓国語として正しい場合】模範解答と語順・語彙・語尾が違っていても、和文の意味を正しく伝えていて、かつ韓国語として文法的に正しければ○。模範解答は一例にすぎず、一字一句一致する必要はない。コメントで「こういう書き方もできるよ」と紹介してもよい。",
+        "- 空欄・未記入・読み取れない場合は ai_reading を空文字にして×。",
+        "- ai_reading は画像から読み取ったハングルをそのまま書き起こす。日本語などが混ざっていたらそのまま含めて書き起こす（勝手に韓国語に補完しない）。",
+        "- 【重要：二重線（取り消し線）の認識】子供は間違えた文字や単語の上に二重線（＝＝）を引いて消すことがあります。二重線で消された部分は無効です。二重線の後に書き直された文字のみを有効な回答として読み取ってください。ai_reading には『~~消された部分~~ → 書き直し後の文字』の形で記録し、最終的な回答のみで採点すること。",
+        "",
+        "【コメント作成の注意】",
+        "- 事実と異なる褒め方をしない。",
+        "- ×の場合は何が足りない/間違っているかを具体的に短く指摘する（特に助詞・パッチム・スペル）。",
+        "- ○の場合は簡潔に一言褒める程度でよい。無理に文法用語を使わない。",
+        "",
+        "【出力形式】",
+        "必ず以下のJSON形式のみで回答してください。前後に説明文を付けないこと。",
+        '{"results": [{"number": <問題番号>, "ai_reading": "<読み取った韓国語>", "correct": <true|false>, "comment": "<小学生向けの短いコメント（日本語、30〜80文字）。○なら褒める、×なら間違いの要点を優しく説明>"}]}',
+        "問題一覧の全問について必ず1件ずつ結果を返してください。",
+    ]
+    return "\n".join(lines)
+
+
+def _build_prompt_en(questions: list[Question]) -> str:
     has_gag = any((q.unit_number or 0) == GAG_UNIT_NUMBER for q in questions)
     lines = [
         "あなたは小学生の英語学習を支援する優しい先生です。",
@@ -273,6 +323,15 @@ class FeedbackBody(BaseModel):
     feedback: str  # 'accept' | 'question'
 
 
+def _round_for(child: Child, q: Question | None) -> int:
+    """問題の言語に応じたラウンド番号を返す"""
+    if not child:
+        return 1
+    if q is not None and getattr(q, "language", "en") == "ko":
+        return child.round_ko or 1
+    return child.round or 1
+
+
 def _is_cleared(db: Session, child_id: int, question_id: int, current_round: int = 1) -> bool:
     answers = (
         db.query(Answer)
@@ -337,7 +396,8 @@ def _confirm_grading(db: Session, g: Grading, batch: GradingBatch, final_correct
     if g.status in ("confirmed", "parent_confirmed"):
         return 0, False
     child = db.query(Child).get(batch.child_id)
-    current_round = child.round if child and child.round else 1
+    q_lang = db.query(Question).get(g.question_id)
+    current_round = _round_for(child, q_lang)
     was_cleared = _is_cleared(db, batch.child_id, g.question_id, current_round)
     db.add(Answer(
         child_id=batch.child_id,
@@ -635,7 +695,8 @@ def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends
 
     # Answer 記録＋ポイント判定（finalの正誤で）
     child = db.query(Child).get(batch.child_id)
-    current_round = child.round if child and child.round else 1
+    q_lang = db.query(Question).get(g.question_id)
+    current_round = _round_for(child, q_lang)
     was_cleared = _is_cleared(db, batch.child_id, g.question_id, current_round)
     db.add(Answer(
         child_id=batch.child_id,
