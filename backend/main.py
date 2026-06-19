@@ -203,6 +203,101 @@ def _migrate_round_system():
         print(f"Migration warning (round system): {e}")
 
 
+def _migrate_question_language():
+    """韓国語編対応: questions に language カラムを追加し、番号のユニーク制約を
+    (language, number) の複合に変更する。既存問題は language='en'。
+    SQLite の列レベル UNIQUE は索引削除できないためテーブルを再構築する
+    （id を保持するので answers / gradings の参照は維持される）。"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "questions" not in tables:
+            conn.close()
+            return  # 新規DB: create_all がモデル通りに作る
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(questions)")]
+        if "language" in cols:
+            conn.close()
+            return  # 移行済み
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE questions_new (
+                id INTEGER PRIMARY KEY,
+                unit_number REAL NOT NULL DEFAULT 0,
+                number INTEGER NOT NULL,
+                japanese TEXT NOT NULL,
+                english TEXT NOT NULL,
+                language TEXT NOT NULL DEFAULT 'en',
+                CONSTRAINT uq_question_language_number UNIQUE (language, number)
+            );
+            INSERT INTO questions_new (id, unit_number, number, japanese, english, language)
+                SELECT id, unit_number, number, japanese, english, 'en' FROM questions;
+            DROP TABLE questions;
+            ALTER TABLE questions_new RENAME TO questions;
+            CREATE INDEX ix_questions_unit_number ON questions (unit_number);
+            CREATE INDEX ix_questions_number ON questions (number);
+            CREATE INDEX ix_questions_language ON questions (language);
+            """
+        )
+        conn.commit()
+        conn.close()
+        print("[migrate] questions テーブルを language 対応に再構築しました")
+    except Exception as e:
+        print(f"Migration warning (question language): {e}")
+
+
+def _migrate_child_round_ko():
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+        if "round_ko" not in cols:
+            conn.execute("ALTER TABLE children ADD COLUMN round_ko INTEGER NOT NULL DEFAULT 1")
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning (child round_ko): {e}")
+
+
+def _migrate_session_language():
+    """active_sessions に language を追加し、ユニーク制約を (child_id, language) に変更。
+    セッションは一時データなので再構築しても影響は小さい。"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "active_sessions" not in tables:
+            conn.close()
+            return
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(active_sessions)")]
+        if "language" in cols:
+            conn.close()
+            return
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE active_sessions_new (
+                id INTEGER PRIMARY KEY,
+                child_id INTEGER NOT NULL,
+                question_ids TEXT NOT NULL,
+                language TEXT NOT NULL DEFAULT 'en',
+                CONSTRAINT uq_session_child_language UNIQUE (child_id, language)
+            );
+            INSERT INTO active_sessions_new (id, child_id, question_ids, language)
+                SELECT id, child_id, question_ids, 'en' FROM active_sessions;
+            DROP TABLE active_sessions;
+            ALTER TABLE active_sessions_new RENAME TO active_sessions;
+            CREATE INDEX ix_active_sessions_child_id ON active_sessions (child_id);
+            """
+        )
+        conn.commit()
+        conn.close()
+        print("[migrate] active_sessions テーブルを language 対応に再構築しました")
+    except Exception as e:
+        print(f"Migration warning (session language): {e}")
+
+
 _migrate_unit_number()
 _migrate_grading_cols()
 _migrate_child_stage()
@@ -211,6 +306,9 @@ _migrate_photo_batch_id()
 _migrate_bonus_defaults()
 _migrate_round_system()
 _migrate_child_settings_cols()
+_migrate_question_language()
+_migrate_child_round_ko()
+_migrate_session_language()
 Base.metadata.create_all(bind=engine)
 _seed_gag_questions()
 

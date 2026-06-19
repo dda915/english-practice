@@ -27,6 +27,7 @@ def list_children(db: Session = Depends(get_db)):
             "id": c.id,
             "name": c.name,
             "round": c.round or 1,
+            "round_ko": c.round_ko or 1,
             "access_code": c.access_code,
             "points_per_clear": get_child_setting(db, c, "points_per_clear"),
             "exchange_rate_money": get_child_setting(db, c, "exchange_rate_money"),
@@ -42,7 +43,7 @@ def get_child_by_code(code: str, db: Session = Depends(get_db)):
     child = db.query(Child).filter(Child.access_code == code).first()
     if not child:
         raise HTTPException(404, "無効なコードです")
-    return {"id": child.id, "name": child.name, "round": child.round or 1}
+    return {"id": child.id, "name": child.name, "round": child.round or 1, "round_ko": child.round_ko or 1}
 
 
 @router.post("")
@@ -73,9 +74,17 @@ def update_child(child_id: int, body: ChildUpdate, db: Session = Depends(get_db)
     return {"id": child.id, "name": child.name}
 
 
-def _get_round(db: Session, child_id: int) -> int:
+def _norm_lang(language: str | None) -> str:
+    return "ko" if language == "ko" else "en"
+
+
+def _get_round(db: Session, child_id: int, language: str = "en") -> int:
     child = db.query(Child).get(child_id)
-    return child.round if child and child.round else 1
+    if not child:
+        return 1
+    if _norm_lang(language) == "ko":
+        return child.round_ko if child.round_ko else 1
+    return child.round if child.round else 1
 
 
 def _is_cleared(db: Session, child_id: int, question_id: int, current_round: int | None = None) -> bool:
@@ -93,11 +102,17 @@ def _is_cleared(db: Session, child_id: int, question_id: int, current_round: int
     return correct > wrong
 
 
-def _get_cleared_set(db: Session, child_id: int, current_round: int | None = None) -> set[int]:
-    """クリア済み問題IDのセットを一括取得（現在のラウンドの解答のみ）"""
+def _get_cleared_set(db: Session, child_id: int, language: str = "en", current_round: int | None = None) -> set[int]:
+    """クリア済み問題IDのセットを一括取得（指定言語・現在のラウンドの解答のみ）"""
+    lang = _norm_lang(language)
     if current_round is None:
-        current_round = _get_round(db, child_id)
-    answers = db.query(Answer).filter(Answer.child_id == child_id, Answer.round == current_round).all()
+        current_round = _get_round(db, child_id, lang)
+    answers = (
+        db.query(Answer)
+        .join(Question, Answer.question_id == Question.id)
+        .filter(Answer.child_id == child_id, Answer.round == current_round, Question.language == lang)
+        .all()
+    )
     stats: dict[int, list[int]] = {}  # question_id -> [correct, wrong]
     for a in answers:
         if a.question_id not in stats:
@@ -109,13 +124,15 @@ def _get_cleared_set(db: Session, child_id: int, current_round: int | None = Non
     return {qid for qid, (c, w) in stats.items() if c > w}
 
 
-def _get_awaiting_parent_set(db: Session, child_id: int) -> set[int]:
-    """不服申立中（awaiting_parent）の問題IDセットを取得"""
+def _get_awaiting_parent_set(db: Session, child_id: int, language: str = "en") -> set[int]:
+    """不服申立中（awaiting_parent）の問題IDセットを取得（指定言語のみ）"""
     from ..models import Grading, GradingBatch
+    lang = _norm_lang(language)
     rows = (
         db.query(Grading.question_id)
         .join(GradingBatch, Grading.batch_id == GradingBatch.id)
-        .filter(GradingBatch.child_id == child_id, Grading.status == "awaiting_parent")
+        .join(Question, Grading.question_id == Question.id)
+        .filter(GradingBatch.child_id == child_id, Grading.status == "awaiting_parent", Question.language == lang)
         .all()
     )
     return {r[0] for r in rows}
@@ -184,13 +201,14 @@ def _count_clears(q_answers) -> int:
 
 
 @router.get("/{child_id}/progress")
-def get_progress(child_id: int, db: Session = Depends(get_db)):
+def get_progress(child_id: int, language: str = "en", db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
 
-    current_round = _get_round(db, child_id)
-    questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
+    lang = _norm_lang(language)
+    current_round = _get_round(db, child_id, lang)
+    questions = db.query(Question).filter(Question.language == lang).order_by(Question.unit_number, Question.number).all()
     answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
     ppc = _get_points_per_clear(db, child_id)
 
@@ -243,19 +261,24 @@ def _session_response(session: ActiveSession, questions: list[Question], resumed
 
 
 @router.get("/{child_id}/batch")
-def get_batch(child_id: int, size: int | None = None, db: Session = Depends(get_db)):
+def get_batch(child_id: int, size: int | None = None, language: str = "en", db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
     if size is None:
         size = int(get_child_setting(db, child, "batch_size"))
 
-    cleared = _get_cleared_set(db, child_id)
-    awaiting = _get_awaiting_parent_set(db, child_id)
+    lang = _norm_lang(language)
+    cleared = _get_cleared_set(db, child_id, lang)
+    awaiting = _get_awaiting_parent_set(db, child_id, lang)
     exclude = cleared | awaiting
 
     # 既存セッションがあればそれを返す
-    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    session = (
+        db.query(ActiveSession)
+        .filter(ActiveSession.child_id == child_id, ActiveSession.language == lang)
+        .first()
+    )
     if session:
         qids = json.loads(session.question_ids)
         remaining = []
@@ -283,13 +306,13 @@ def get_batch(child_id: int, size: int | None = None, db: Session = Depends(get_
         db.flush()
 
     # 新規セッション作成
-    questions = db.query(Question).order_by(Question.unit_number, Question.number).all()
+    questions = db.query(Question).filter(Question.language == lang).order_by(Question.unit_number, Question.number).all()
     uncleared_normal = [q for q in questions if q.id not in exclude and q.unit_number != GAG_UNIT_NUMBER]
     batch = uncleared_normal[:size]
 
     if batch:
         qids = [q.id for q in batch]
-        new_session = ActiveSession(child_id=child_id, question_ids=json.dumps(qids))
+        new_session = ActiveSession(child_id=child_id, question_ids=json.dumps(qids), language=lang)
         db.add(new_session)
         db.commit()
         db.refresh(new_session)
@@ -304,13 +327,18 @@ def get_batch(child_id: int, size: int | None = None, db: Session = Depends(get_
 
 
 @router.get("/{child_id}/session")
-def get_session(child_id: int, db: Session = Depends(get_db)):
+def get_session(child_id: int, language: str = "en", db: Session = Depends(get_db)):
     """現在のセッション情報を返す"""
-    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    lang = _norm_lang(language)
+    session = (
+        db.query(ActiveSession)
+        .filter(ActiveSession.child_id == child_id, ActiveSession.language == lang)
+        .first()
+    )
     if not session:
         return {"active": False, "questions": []}
 
-    cleared = _get_cleared_set(db, child_id)
+    cleared = _get_cleared_set(db, child_id, lang)
     qids = json.loads(session.question_ids)
     questions = []
     remaining = 0
@@ -345,7 +373,7 @@ def get_question_detail(child_id: int, question_id: int, db: Session = Depends(g
         .order_by(Answer.id)
         .all()
     )
-    current_round = _get_round(db, child_id)
+    current_round = _get_round(db, child_id, q.language)
     history = _annotate_history(answers, _get_points_per_clear(db, child_id), current_round)
 
     # この子供のこの問題に対する全 grading（AIコメント＋チャット履歴）
@@ -401,6 +429,7 @@ def get_question_detail(child_id: int, question_id: int, db: Session = Depends(g
             "unit_number": q.unit_number,
             "japanese": q.japanese,
             "english": q.english,
+            "language": q.language,
         },
         "history": history,
         "gradings": grading_list,
@@ -409,9 +438,14 @@ def get_question_detail(child_id: int, question_id: int, db: Session = Depends(g
 
 
 @router.delete("/{child_id}/session")
-def clear_session(child_id: int, db: Session = Depends(get_db)):
+def clear_session(child_id: int, language: str = "en", db: Session = Depends(get_db)):
     """セッションを手動でリセット"""
-    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    lang = _norm_lang(language)
+    session = (
+        db.query(ActiveSession)
+        .filter(ActiveSession.child_id == child_id, ActiveSession.language == lang)
+        .first()
+    )
     if session:
         photos = db.query(SessionPhoto).filter(SessionPhoto.session_id == session.id).all()
         for p in photos:
@@ -440,34 +474,54 @@ class SetRoundBody(BaseModel):
 
 
 @router.post("/{child_id}/new-round")
-def start_new_round(child_id: int, db: Session = Depends(get_db)):
+def start_new_round(child_id: int, language: str = "en", db: Session = Depends(get_db)):
     """復習開始: ラウンドを1つ進める（全問が未クリア状態に戻る）"""
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
-    child.round = (child.round or 1) + 1
-    # 進行中のセッションがあれば削除
-    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    lang = _norm_lang(language)
+    if lang == "ko":
+        child.round_ko = (child.round_ko or 1) + 1
+        new_round = child.round_ko
+    else:
+        child.round = (child.round or 1) + 1
+        new_round = child.round
+    # 進行中のセッションがあれば削除（該当言語のみ）
+    session = (
+        db.query(ActiveSession)
+        .filter(ActiveSession.child_id == child_id, ActiveSession.language == lang)
+        .first()
+    )
     if session:
         db.delete(session)
     db.commit()
-    return {"id": child.id, "name": child.name, "round": child.round}
+    return {"id": child.id, "name": child.name, "round": new_round, "language": lang}
 
 
 @router.put("/{child_id}/round")
-def set_round(child_id: int, body: SetRoundBody, db: Session = Depends(get_db)):
+def set_round(child_id: int, body: SetRoundBody, language: str = "en", db: Session = Depends(get_db)):
     """ラウンドを直接指定（管理用）"""
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
     if body.round < 1:
         raise HTTPException(400, "ラウンドは1以上")
-    child.round = body.round
-    session = db.query(ActiveSession).filter(ActiveSession.child_id == child_id).first()
+    lang = _norm_lang(language)
+    if lang == "ko":
+        child.round_ko = body.round
+        new_round = child.round_ko
+    else:
+        child.round = body.round
+        new_round = child.round
+    session = (
+        db.query(ActiveSession)
+        .filter(ActiveSession.child_id == child_id, ActiveSession.language == lang)
+        .first()
+    )
     if session:
         db.delete(session)
     db.commit()
-    return {"id": child.id, "name": child.name, "round": child.round}
+    return {"id": child.id, "name": child.name, "round": new_round, "language": lang}
 
 
 @router.get("/timeline")

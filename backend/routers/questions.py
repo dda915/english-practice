@@ -9,23 +9,39 @@ from ..models import Question
 router = APIRouter(prefix="/api/questions", tags=["questions"])
 
 
+def _norm_lang(language: str) -> str:
+    return "ko" if language == "ko" else "en"
+
+
 class QuestionBody(BaseModel):
     number: int
     japanese: str
     english: str
     unit_number: float = 0
+    language: str = "en"
 
 
 @router.post("")
 def add_question(body: QuestionBody, db: Session = Depends(get_db)):
-    existing = db.query(Question).filter(Question.number == body.number).first()
+    lang = _norm_lang(body.language)
+    existing = (
+        db.query(Question)
+        .filter(Question.number == body.number, Question.language == lang)
+        .first()
+    )
     if existing:
         raise HTTPException(400, f"問題番号 {body.number} は既に存在します")
-    q = Question(number=body.number, unit_number=body.unit_number, japanese=body.japanese, english=body.english)
+    q = Question(
+        number=body.number,
+        unit_number=body.unit_number,
+        japanese=body.japanese,
+        english=body.english,
+        language=lang,
+    )
     db.add(q)
     db.commit()
     db.refresh(q)
-    return {"id": q.id, "number": q.number, "unit_number": q.unit_number, "japanese": q.japanese, "english": q.english}
+    return {"id": q.id, "number": q.number, "unit_number": q.unit_number, "japanese": q.japanese, "english": q.english, "language": q.language}
 
 
 class QuestionPatch(BaseModel):
@@ -35,8 +51,9 @@ class QuestionPatch(BaseModel):
 
 
 @router.patch("/{number}")
-def update_question(number: int, body: QuestionPatch, db: Session = Depends(get_db)):
-    q = db.query(Question).filter(Question.number == number).first()
+def update_question(number: int, body: QuestionPatch, language: str = "en", db: Session = Depends(get_db)):
+    lang = _norm_lang(language)
+    q = db.query(Question).filter(Question.number == number, Question.language == lang).first()
     if not q:
         raise HTTPException(404, f"問題番号 {number} が見つかりません")
     if body.unit_number is not None:
@@ -47,13 +64,14 @@ def update_question(number: int, body: QuestionPatch, db: Session = Depends(get_
         q.english = body.english
     db.commit()
     db.refresh(q)
-    return {"id": q.id, "number": q.number, "unit_number": q.unit_number, "japanese": q.japanese, "english": q.english}
+    return {"id": q.id, "number": q.number, "unit_number": q.unit_number, "japanese": q.japanese, "english": q.english, "language": q.language}
 
 
 @router.delete("/{number}")
-def delete_question(number: int, force: bool = False, db: Session = Depends(get_db)):
+def delete_question(number: int, language: str = "en", force: bool = False, db: Session = Depends(get_db)):
     from ..models import Answer, Grading, ChatMessage, Message
-    q = db.query(Question).filter(Question.number == number).first()
+    lang = _norm_lang(language)
+    q = db.query(Question).filter(Question.number == number, Question.language == lang).first()
     if not q:
         raise HTTPException(404, f"問題番号 {number} が見つかりません")
     has_answers = db.query(Answer).filter(Answer.question_id == q.id).first()
@@ -73,16 +91,19 @@ def delete_question(number: int, force: bool = False, db: Session = Depends(get_
 
 
 @router.get("")
-def list_questions(db: Session = Depends(get_db)):
-    qs = db.query(Question).order_by(Question.unit_number, Question.number).all()
+def list_questions(language: str | None = None, db: Session = Depends(get_db)):
+    q = db.query(Question)
+    if language is not None:
+        q = q.filter(Question.language == _norm_lang(language))
+    qs = q.order_by(Question.unit_number, Question.number).all()
     return [
-        {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english}
+        {"id": q.id, "unit_number": q.unit_number, "number": q.number, "japanese": q.japanese, "english": q.english, "language": q.language}
         for q in qs
     ]
 
 
 @router.post("/import")
-async def import_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_csv(file: UploadFile = File(...), language: str = "en", db: Session = Depends(get_db)):
     if not file.filename.endswith(".csv"):
         raise HTTPException(400, "CSVファイルをアップロードしてください")
 
@@ -97,6 +118,7 @@ async def import_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
     else:
         raise HTTPException(400, "ファイルのエンコーディングを認識できません")
 
+    lang = _norm_lang(language)
     reader = csv.reader(io.StringIO(text))
     imported = 0
     skipped = 0
@@ -116,13 +138,17 @@ async def import_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
         if not japanese or not english:
             continue
 
-        existing = db.query(Question).filter(Question.number == number).first()
+        existing = (
+            db.query(Question)
+            .filter(Question.number == number, Question.language == lang)
+            .first()
+        )
         if existing:
             existing.japanese = japanese
             existing.english = english
             skipped += 1
         else:
-            db.add(Question(number=number, japanese=japanese, english=english))
+            db.add(Question(number=number, japanese=japanese, english=english, language=lang))
             imported += 1
 
     db.commit()
