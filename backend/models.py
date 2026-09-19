@@ -26,6 +26,10 @@ class Child(Base):
     stage = Column(Integer, nullable=False, default=1)  # deprecated, use round
     round = Column(Integer, nullable=False, default=1)  # 英語編のラウンド
     round_ko = Column(Integer, nullable=False, default=1)  # 韓国語編のラウンド
+    # 「ある程度復習」用。このラウンドで最初に出す問題の id。0 = 先頭から全部やる。
+    # 位置（何問目）ではなく問題 id で持つ理由: あとから問題を挿し込んでも境目がずれないため。
+    round_start = Column(Integer, nullable=False, default=0)  # 英語編の開始位置
+    round_start_ko = Column(Integer, nullable=False, default=0)  # 韓国語編の開始位置
     access_code = Column(Text, nullable=True, unique=True)
     points_per_clear = Column(Float, nullable=True)
     exchange_rate_money = Column(Float, nullable=True)

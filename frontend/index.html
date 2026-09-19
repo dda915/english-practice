@@ -1002,7 +1002,7 @@
           @click="currentChildId = c.id; switchChild();">
           <div class="summary-name" x-text="c.name"></div>
           <div class="summary-stats">
-            &#x30AF;&#x30EA;&#x30A2;: <strong x-text="summaryData[c.id]?.cleared || 0"></strong> / <span x-text="questions.length"></span><br>
+            &#x30AF;&#x30EA;&#x30A2;: <strong x-text="summaryData[c.id]?.cleared || 0"></strong> / <span x-text="summaryData[c.id]?.inRound ?? questions.length"></span><br>
             &#x30DD;&#x30A4;&#x30F3;&#x30C8;: <strong style="color:var(--gold);" x-text="fmtPt(summaryData[c.id]?.points || 0)"></strong> pt
           </div>
           <div style="margin-top:8px;">
@@ -1017,7 +1017,9 @@
     <div class="stats-bar no-print">
       <div class="stat-item">
         <div class="stat-label">&#x5168;&#x554F;&#x984C;&#x6570;</div>
-        <div class="stat-value" x-text="questions.length"></div>
+        <div class="stat-value" x-text="questionsInRound || questions.length"></div>
+        <div x-show="skippedCount > 0" style="font-size:11px; color:var(--text-sub); margin-top:2px;"
+             x-text="skippedCount + '問はとばし中'"></div>
       </div>
       <div class="stat-item">
         <div class="stat-label">&#x30AF;&#x30EA;&#x30A2;&#x6E08;</div>
@@ -1210,10 +1212,10 @@
       </div>
     </template>
 
-    <div x-show="currentBatch.length === 0 && clearedCount < questions.length" class="card no-print" style="text-align:center; color:var(--text-sub); padding:40px;">
+    <div x-show="currentBatch.length === 0 && clearedCount < questionsInRound" class="card no-print" style="text-align:center; color:var(--text-sub); padding:40px;">
       &#x300C;&#x6B21;&#x306E;&#x25CB;&#x554F;&#x3092;&#x51FA;&#x984C;&#x300D;&#x3092;&#x62BC;&#x3059;&#x3068;&#x3001;<span x-text="currentChildName"></span>&#x306E;&#x672A;&#x30AF;&#x30EA;&#x30A2;&#x554F;&#x984C;&#x304C;&#x8868;&#x793A;&#x3055;&#x308C;&#x307E;&#x3059;
     </div>
-    <div x-show="clearedCount >= questions.length && questions.length > 0" class="card no-print" style="text-align:center; padding:40px;">
+    <div x-show="clearedCount >= questionsInRound && questionsInRound > 0" class="card no-print" style="text-align:center; padding:40px;">
       &#x1F389; <strong x-text="currentChildName"></strong> &#x306F;&#x3059;&#x3079;&#x3066;&#x306E;&#x554F;&#x984C;&#x3092;&#x30AF;&#x30EA;&#x30A2;&#x3057;&#x307E;&#x3057;&#x305F;&#xFF01;
     </div>
 
@@ -1292,6 +1294,7 @@
       <div class="filter-tab" :class="historyFilter === 'cleared' && 'active'" @click="historyFilter = 'cleared'">&#x30AF;&#x30EA;&#x30A2;&#x6E08;</div>
       <div class="filter-tab" :class="historyFilter === 'pending' && 'active'" @click="historyFilter = 'pending'">&#x672A;&#x30AF;&#x30EA;&#x30A2;</div>
       <div class="filter-tab" :class="historyFilter === 'unanswered' && 'active'" @click="historyFilter = 'unanswered'">&#x672A;&#x56DE;&#x7B54;</div>
+      <div class="filter-tab" x-show="skippedCount > 0" :class="historyFilter === 'skipped' && 'active'" @click="historyFilter = 'skipped'">とばす</div>
     </div>
     <div class="card" style="overflow-x:auto;">
       <table class="history-table">
@@ -1318,8 +1321,8 @@
               <td><span x-text="q.accuracy !== null ? q.accuracy + '%' : '&#x2014;'"></span></td>
               <td>
                 <span class="badge"
-                  :class="q.cleared ? 'badge-clear' : (q.history.length > 0 ? 'badge-pending' : '')"
-                  x-text="q.cleared ? '&#x30AF;&#x30EA;&#x30A2;' : (q.history.length > 0 ? '&#x5B66;&#x7FD2;&#x4E2D;' : '&#x2014;')"></span>
+                  :class="q.skipped ? '' : (q.cleared ? 'badge-clear' : (q.history.length > 0 ? 'badge-pending' : ''))"
+                  x-text="q.skipped ? 'とばす' : (q.cleared ? '&#x30AF;&#x30EA;&#x30A2;' : (q.history.length > 0 ? '&#x5B66;&#x7FD2;&#x4E2D;' : '&#x2014;'))"></span>
               </td>
               <td style="font-size:11.5px; color:var(--text-sub); font-variant-numeric:tabular-nums;"
                   x-text="q.history.length > 0 ? formatDateTime(q.history[q.history.length-1].date) : '—'"></td>
@@ -1586,8 +1589,12 @@
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span class="child-card-round" x-text="editionLabel + ' ラウンド ' + (lang === 'ko' ? (c.round_ko || 1) : (c.round || 1))"></span>
+              <span class="child-card-round" x-show="roundStartOf(c) > 1"
+                x-text="roundStartOf(c) + '問目から（手前の' + (roundStartOf(c) - 1) + '問はとばす）'"></span>
               <button class="btn btn-outline btn-sm" @click="startNewRound(c.id, c.name)"
                 style="color:var(--accent); border-color:var(--accent); padding:4px 10px;">復習開始</button>
+              <button class="btn btn-outline btn-sm" x-show="(lang === 'ko' ? (c.round_ko || 1) : (c.round || 1)) > 1"
+                @click="undoRound(c.id, c.name)" style="padding:4px 10px;">1つ戻す</button>
             </div>
           </div>
 
@@ -1845,6 +1852,8 @@ function app() {
     pendingPointsTotal: 0,
     pointLogs: [],
     clearedCount: 0,
+    skippedCount: 0,        // 今回のラウンドで「とばす」問題数（ある程度復習）
+    questionsInRound: 0,    // 今回のラウンドで実際に出る問題数（全問 - とばす分）
     progressPercent: 0,
     summaryData: {},
     csvResult: null,
@@ -2023,8 +2032,11 @@ function app() {
       this.exchangeRequests = requests;
       this.pendingRequests = requests.filter(r => !r.fulfilled && r.child_name === this.currentChildName);
       this.clearedCount = progress.filter(p => p.cleared).length;
-      this.progressPercent = this.questions.length > 0
-        ? Math.round(this.clearedCount / this.questions.length * 100) : 0;
+      // とばした問題は分母から外す。出ない問題を数えると進捗が永遠に 100% にならないため
+      this.skippedCount = progress.filter(p => p.skipped).length;
+      this.questionsInRound = progress.length - this.skippedCount;
+      this.progressPercent = this.questionsInRound > 0
+        ? Math.round(this.clearedCount / this.questionsInRound * 100) : 0;
       await this.loadAiNotifications();
       await this.loadMessages();
     },
@@ -2036,10 +2048,12 @@ function app() {
           this.api(`/api/children/${c.id}/points`),
         ]);
         const cleared = progress.filter(p => p.cleared).length;
+        const inRound = progress.length - progress.filter(p => p.skipped).length;
         this.summaryData[c.id] = {
           cleared,
+          inRound,
           points: points.balance,
-          percent: this.questions.length > 0 ? Math.round(cleared / this.questions.length * 100) : 0,
+          percent: inRound > 0 ? Math.round(cleared / inRound * 100) : 0,
         };
       }
     },
@@ -2516,17 +2530,58 @@ function app() {
       }
     },
 
+    roundStartOf(c) {
+      return (this.lang === 'ko' ? c.round_start_position_ko : c.round_start_position) || 1;
+    },
+
     async startNewRound(childId, childName) {
-      if (!confirm(`${childName} の【${this.editionLabel}】の復習を開始しますか？\n全問が未クリアに戻り、ラウンドが1つ進みます。\n（過去の解答履歴はそのまま残ります）`)) return;
+      const c0 = this.children.find(c => c.id === childId);
+      const prev = c0 ? this.roundStartOf(c0) : 1;
+      // ある程度復習: 手前の易しい所を飛ばして途中から始められる。1 なら従来どおり全部
+      const input = prompt(
+        `${childName} の【${this.editionLabel}】の復習を何問目から始めますか？\n`
+        + `1 = 先頭から全部（完全な復習）\n`
+        + `例: 100 と入れると 1〜99 問目は今回は出しません\n`
+        + `※ 飛ばした問題の解答履歴は消えません`,
+        String(prev));
+      if (input === null) return;
+      const startPosition = parseInt(input, 10);
+      if (!Number.isFinite(startPosition) || startPosition < 1) { this.showToast('数字を入れてください'); return; }
+      const skipNote = startPosition > 1
+        ? `${startPosition}問目から（手前の${startPosition - 1}問はとばす）`
+        : '先頭から全部';
+      if (!confirm(`${childName} の【${this.editionLabel}】の復習を開始しますか？\n${skipNote}\nラウンドが1つ進み、出す問題が未クリアに戻ります。\n（過去の解答履歴はそのまま残ります）`)) return;
       try {
-        const result = await this.api(`/api/children/${childId}/new-round?language=${this.lang}`, { method: 'POST' });
-        const c = this.children.find(c => c.id === childId);
-        if (c) { if (this.lang === 'ko') c.round_ko = result.round; else c.round = result.round; }
-        this.showToast(`${result.name} の${this.editionLabel} ラウンド${result.round}を開始しました`);
+        const result = await this.api(`/api/children/${childId}/new-round?language=${this.lang}`, {
+          method: 'POST',
+          body: JSON.stringify({ start_position: startPosition }),
+        });
+        await this.loadChildren();
+        this.showToast(`${result.name} の${this.editionLabel} ラウンド${result.round}を開始しました（${result.start_position}問目から）`);
         await this.loadChildData();
         await this.loadAllSummaries();
       } catch (e) {
         this.showToast('復習開始に失敗しました');
+      }
+    },
+
+    async undoRound(childId, childName) {
+      // 復習開始を押し間違えたときの取り消し。ラウンドの数字を1つ戻すだけで、解答履歴は触らない
+      const c = this.children.find(c => c.id === childId);
+      const now = c ? (this.lang === 'ko' ? (c.round_ko || 1) : (c.round || 1)) : 1;
+      if (now <= 1) return;
+      if (!confirm(`${childName} の【${this.editionLabel}】を ラウンド${now - 1} に戻しますか？\n前のラウンドのクリア状況がそのまま戻ります。`)) return;
+      try {
+        const result = await this.api(`/api/children/${childId}/round?language=${this.lang}`, {
+          method: 'PUT',
+          body: JSON.stringify({ round: now - 1 }),
+        });
+        await this.loadChildren();
+        this.showToast(`${result.name} を ラウンド${result.round} に戻しました`);
+        await this.loadChildData();
+        await this.loadAllSummaries();
+      } catch (e) {
+        this.showToast('取り消しに失敗しました');
       }
     },
 
@@ -2990,8 +3045,9 @@ function app() {
       let list;
       switch (this.historyFilter) {
         case 'cleared': list = this.progress.filter(q => q.cleared); break;
-        case 'pending': list = this.progress.filter(q => !q.cleared && q.history.length > 0); break;
-        case 'unanswered': list = this.progress.filter(q => q.history.length === 0); break;
+        case 'pending': list = this.progress.filter(q => !q.cleared && !q.skipped && q.history.length > 0); break;
+        case 'unanswered': list = this.progress.filter(q => !q.skipped && q.history.length === 0); break;
+        case 'skipped': list = this.progress.filter(q => q.skipped); break;
         default: list = this.progress.slice();
       }
       // 解答済みは最新解答日の新しい順、未解答は問題番号順で末尾

@@ -399,6 +399,22 @@ def _migrate_child_round_ko():
         print(f"Migration warning (child round_ko): {e}")
 
 
+def _migrate_child_round_start():
+    """「ある程度復習」: children.round_start / round_start_ko を追加"""
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+        if "round_start" not in cols:
+            conn.execute("ALTER TABLE children ADD COLUMN round_start INTEGER NOT NULL DEFAULT 0")
+        if "round_start_ko" not in cols:
+            conn.execute("ALTER TABLE children ADD COLUMN round_start_ko INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration warning (child round_start): {e}")
+
+
 def _migrate_session_language():
     """active_sessions に language を追加し、ユニーク制約を (child_id, language) に変更。
     セッションは一時データなので再構築しても影響は小さい。"""
@@ -447,6 +463,7 @@ _migrate_round_system()
 _migrate_child_settings_cols()
 _migrate_question_language()
 _migrate_child_round_ko()
+_migrate_child_round_start()
 _migrate_session_language()
 Base.metadata.create_all(bind=engine)
 _seed_gag_questions()

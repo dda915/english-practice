@@ -28,6 +28,8 @@ def list_children(db: Session = Depends(get_db)):
             "name": c.name,
             "round": c.round or 1,
             "round_ko": c.round_ko or 1,
+            "round_start_position": _qid_to_position(db, "en", c.round_start or 0),
+            "round_start_position_ko": _qid_to_position(db, "ko", c.round_start_ko or 0),
             "access_code": c.access_code,
             "points_per_clear": get_child_setting(db, c, "points_per_clear"),
             "exchange_rate_money": get_child_setting(db, c, "exchange_rate_money"),
@@ -138,6 +140,66 @@ def _get_awaiting_parent_set(db: Session, child_id: int, language: str = "en") -
     return {r[0] for r in rows}
 
 
+# ─── 「ある程度復習」の開始位置 ───
+# 復習を先頭からではなく途中から始めるための仕組み。
+# 位置（何問目）ではなく問題 id を持たせる。あとから問題を挿し込んでも境目がずれないため。
+# 飛ばした問題には嘘の解答を作らない（正答率が壊れて、あとから読めなくなるため）。
+
+
+def _ordered_questions(db: Session, lang: str) -> list[Question]:
+    """出題順（unit_number, number）に並べた通常問題。ギャグ問題は数に入れない。"""
+    return (
+        db.query(Question)
+        .filter(Question.language == lang, Question.unit_number != GAG_UNIT_NUMBER)
+        .order_by(Question.unit_number, Question.number)
+        .all()
+    )
+
+
+def _get_round_start_qid(db: Session, child_id: int, language: str = "en") -> int:
+    child = db.query(Child).get(child_id)
+    if not child:
+        return 0
+    if _norm_lang(language) == "ko":
+        return child.round_start_ko or 0
+    return child.round_start or 0
+
+
+def _get_skipped_set(db: Session, child_id: int, language: str = "en") -> set[int]:
+    """今回のラウンドで飛ばす問題 ID のセット（開始位置より前にあるもの）"""
+    lang = _norm_lang(language)
+    start_qid = _get_round_start_qid(db, child_id, lang)
+    if not start_qid:
+        return set()
+    skipped: set[int] = set()
+    for q in _ordered_questions(db, lang):
+        if q.id == start_qid:
+            return skipped
+        skipped.add(q.id)
+    # 開始位置の問題が消えている（問題を消した等）。境目が分からないので飛ばさない
+    return set()
+
+
+def _position_to_qid(db: Session, lang: str, position: int) -> int:
+    """「N 問目」を問題 id に直す。1 以下・範囲外は 0（＝先頭から）"""
+    if position is None or position <= 1:
+        return 0
+    ordered = _ordered_questions(db, lang)
+    if position > len(ordered):
+        raise HTTPException(400, f"{position} 問目はありません（全 {len(ordered)} 問）")
+    return ordered[position - 1].id
+
+
+def _qid_to_position(db: Session, lang: str, qid: int) -> int:
+    """問題 id を「N 問目」に直す。分からなければ 1"""
+    if not qid:
+        return 1
+    for i, q in enumerate(_ordered_questions(db, lang), 1):
+        if q.id == qid:
+            return i
+    return 1
+
+
 def _annotate_history(q_answers, points_per_clear, current_round: int = 1):
     """各解答に cleared_by_this / points_earned を付与（ラウンドごとに集計）"""
     history = []
@@ -208,6 +270,7 @@ def get_progress(child_id: int, language: str = "en", db: Session = Depends(get_
 
     lang = _norm_lang(language)
     current_round = _get_round(db, child_id, lang)
+    skipped_ids = _get_skipped_set(db, child_id, lang)
     questions = db.query(Question).filter(Question.language == lang).order_by(Question.unit_number, Question.number).all()
     answers = db.query(Answer).filter(Answer.child_id == child_id).order_by(Answer.id).all()
     ppc = _get_points_per_clear(db, child_id)
@@ -241,6 +304,7 @@ def get_progress(child_id: int, language: str = "en", db: Session = Depends(get_
             "japanese": q.japanese,
             "english": q.english,
             "cleared": cleared,
+            "skipped": q.id in skipped_ids,
             "clear_count": clear_count,
             "accuracy": accuracy,
             "history": history,
@@ -271,7 +335,8 @@ def get_batch(child_id: int, size: int | None = None, language: str = "en", db: 
     lang = _norm_lang(language)
     cleared = _get_cleared_set(db, child_id, lang)
     awaiting = _get_awaiting_parent_set(db, child_id, lang)
-    exclude = cleared | awaiting
+    skipped = _get_skipped_set(db, child_id, lang)
+    exclude = cleared | awaiting | skipped
 
     # 既存セッションがあればそれを返す
     session = (
@@ -471,20 +536,37 @@ def clear_session(child_id: int, language: str = "en", db: Session = Depends(get
 
 class SetRoundBody(BaseModel):
     round: int
+    start_position: int | None = None  # 何問目から始めるか（1 = 先頭から）
+
+
+class NewRoundBody(BaseModel):
+    start_position: int = 1  # 何問目から始めるか（1 = 先頭から＝完全な復習）
 
 
 @router.post("/{child_id}/new-round")
-def start_new_round(child_id: int, language: str = "en", db: Session = Depends(get_db)):
-    """復習開始: ラウンドを1つ進める（全問が未クリア状態に戻る）"""
+def start_new_round(
+    child_id: int,
+    language: str = "en",
+    body: NewRoundBody | None = None,
+    db: Session = Depends(get_db),
+):
+    """復習開始: ラウンドを1つ進める（全問が未クリア状態に戻る）
+
+    start_position を渡すと、そこより前の問題は今回のラウンドでは出さない（ある程度復習）。
+    渡さなければ従来どおり先頭から全部やる。
+    """
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")
     lang = _norm_lang(language)
+    start_qid = _position_to_qid(db, lang, body.start_position if body else 1)
     if lang == "ko":
         child.round_ko = (child.round_ko or 1) + 1
+        child.round_start_ko = start_qid
         new_round = child.round_ko
     else:
         child.round = (child.round or 1) + 1
+        child.round_start = start_qid
         new_round = child.round
     # 進行中のセッションがあれば削除（該当言語のみ）
     session = (
@@ -495,7 +577,13 @@ def start_new_round(child_id: int, language: str = "en", db: Session = Depends(g
     if session:
         db.delete(session)
     db.commit()
-    return {"id": child.id, "name": child.name, "round": new_round, "language": lang}
+    return {
+        "id": child.id,
+        "name": child.name,
+        "round": new_round,
+        "language": lang,
+        "start_position": _qid_to_position(db, lang, start_qid),
+    }
 
 
 @router.put("/{child_id}/round")
@@ -507,11 +595,15 @@ def set_round(child_id: int, body: SetRoundBody, language: str = "en", db: Sessi
     if body.round < 1:
         raise HTTPException(400, "ラウンドは1以上")
     lang = _norm_lang(language)
+    # start_position を渡さなければ「飛ばさない」に戻す（前のラウンドの設定を引きずらせない）
+    start_qid = _position_to_qid(db, lang, body.start_position if body.start_position else 1)
     if lang == "ko":
         child.round_ko = body.round
+        child.round_start_ko = start_qid
         new_round = child.round_ko
     else:
         child.round = body.round
+        child.round_start = start_qid
         new_round = child.round
     session = (
         db.query(ActiveSession)
@@ -521,7 +613,13 @@ def set_round(child_id: int, body: SetRoundBody, language: str = "en", db: Sessi
     if session:
         db.delete(session)
     db.commit()
-    return {"id": child.id, "name": child.name, "round": new_round, "language": lang}
+    return {
+        "id": child.id,
+        "name": child.name,
+        "round": new_round,
+        "language": lang,
+        "start_position": _qid_to_position(db, lang, start_qid),
+    }
 
 
 @router.get("/timeline")

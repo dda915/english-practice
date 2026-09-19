@@ -223,6 +223,23 @@ def _ensure_child_round_ko():
         print(f"Migration in seed (round_ko): {e}")
 
 
+def _ensure_child_round_start():
+    try:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_path)
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        if "children" in tables:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(children)")]
+            if "round_start" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN round_start INTEGER NOT NULL DEFAULT 0")
+            if "round_start_ko" not in cols:
+                conn.execute("ALTER TABLE children ADD COLUMN round_start_ko INTEGER NOT NULL DEFAULT 0")
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Migration in seed (round_start): {e}")
+
+
 def _ensure_session_language():
     try:
         db_path = DATABASE_URL.replace("sqlite:///", "")
@@ -267,6 +284,7 @@ def seed():
     _ensure_child_settings_columns()
     _ensure_question_language()
     _ensure_child_round_ko()
+    _ensure_child_round_start()
     _ensure_session_language()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
