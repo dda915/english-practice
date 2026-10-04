@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db, now_jst
 from ..models import PointLog, Child, Setting, ExchangeRequest
-from ..mail import send_exchange_notification
+from ..mail import send_exchange_notification, SITE_URL
 from ..backup import backup_to_dropbox
 from .settings import get_child_setting
 
@@ -235,7 +235,7 @@ def fulfill_request_from_email(req_id: int, db: Session = Depends(get_db)):
 <html><body style="font-family:sans-serif; max-width:500px; margin:50px auto; text-align:center;">
 <h2 style="color:#666;">処理済みです</h2>
 <p>このリクエストは既に対応済みです。</p>
-<a href="https://english-practice-5285.onrender.com" style="color:#2d5a27;">サイトに戻る</a>
+<a href="{SITE_URL}" style="color:#2d5a27;">サイトに戻る</a>
 </body></html>""")
 
     # ポイント減算
@@ -261,5 +261,5 @@ def fulfill_request_from_email(req_id: int, db: Session = Depends(get_db)):
 <h2 style="color:#2d5a27;">対応済みにしました</h2>
 <p>{req.child.name}: {desc}</p>
 <p>{req.points}pt を減算しました。</p>
-<a href="https://english-practice-5285.onrender.com" style="color:#2d5a27;">サイトに戻る</a>
+<a href="{SITE_URL}" style="color:#2d5a27;">サイトに戻る</a>
 </body></html>""")

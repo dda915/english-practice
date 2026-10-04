@@ -1,0 +1,35 @@
+# apps01 の /opt/paepae で動かす (deploy.sh がこのファイルを /opt/paepae へ写す)
+#
+# ts  … PaePae 専用の Tailscale の窓口 (端末名 paepae)。Funnel で https://paepae.tail3daacc.ts.net/ を外に出す
+#        なぜ専用の窓口か: apps01 自身の 443 は依頼者向けの shiryo、Funnel の 8443 は置き場 (okiba) が使っている。
+#        相乗りすると依頼者向けの設定を触ることになり、ポート番号付きの URL だと Android アプリ (TWA) の確認が通らないおそれがある
+# app … PaePae 本体 (FastAPI)。外へはポートを開けず、ts からだけ届く
+services:
+  ts:
+    image: tailscale/tailscale:stable
+    container_name: paepae-ts
+    hostname: paepae
+    env_file: ./ts.env
+    environment:
+      - TS_HOSTNAME=paepae
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+      # tun を使わない形。Funnel の受け口と app への中継だけなので これで足りる (特権も要らない)
+      - TS_USERSPACE=true
+    volumes:
+      - ./ts-state:/var/lib/tailscale
+      - ./serve.json:/config/serve.json:ro
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ./app
+      dockerfile: deploy/apps01/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    image: paepae-app
+    container_name: paepae-app
+    env_file: ./.env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

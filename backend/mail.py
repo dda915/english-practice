@@ -5,8 +5,11 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 from email.utils import make_msgid
+from urllib.parse import urlparse
 
-SITE_URL = "https://english-practice-5285.onrender.com"
+# 置き場所 (Render → apps01) が変わっても直書きを探し回らずに済むよう、環境変数で差し替えられるようにする
+SITE_URL = os.environ.get("SITE_URL", "https://english-practice-5285.onrender.com").rstrip("/")
+SITE_HOST = urlparse(SITE_URL).hostname
 
 
 def send_exchange_notification(child_name: str, type_label: str, converted: int, unit: str, points: int, balance: int, request_id: int):
@@ -154,7 +157,7 @@ def send_notification(subject: str, body: str, html: bool = False, attachments: 
                     msg["References"] = et.message_id
                 else:
                     # 新規スレッド → Message-ID を記録
-                    new_id = make_msgid(domain="english-practice-5285.onrender.com")
+                    new_id = make_msgid(domain=SITE_HOST)
                     msg["Message-ID"] = new_id
                     db.add(EmailThread(thread_key=thread_key, message_id=new_id))
                     db.commit()

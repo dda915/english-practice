@@ -610,7 +610,7 @@ def resolve_grading(grading_id: int, body: ResolveBody, db: Session = Depends(ge
                     .order_by(SessionPhoto.id)
                     .all()
                 )
-            base_url = "https://english-practice-5285.onrender.com"
+            from ..mail import SITE_URL as base_url
             photo_urls = [f"{base_url}/api/sessions/photo-by-id/{p.id}/file" for p in photos]
             send_escalation_notification(
                 child_name=child.name if child else "子供",

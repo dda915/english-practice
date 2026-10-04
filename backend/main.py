@@ -488,7 +488,8 @@ app.include_router(bonus.router)
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
-APP_VERSION = os.environ.get("RENDER_GIT_COMMIT") or now_jst().strftime("%Y%m%d%H%M%S")
+# Render は RENDER_GIT_COMMIT、apps01 はビルド時に GIT_COMMIT を入れる
+APP_VERSION = os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or now_jst().strftime("%Y%m%d%H%M%S")
 
 
 @app.get("/api/version")
