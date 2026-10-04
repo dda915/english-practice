@@ -545,6 +545,12 @@
   .fade-in { animation: fadeIn 0.2s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
+  /* 保護者モード中の鍵ボタン
+     🔒 と 🔓 は輪っかが少し外れるだけで見分けにくく、絵文字には color も効かない。
+     保護者モードのままゆめに渡すと答えが見えてしまうので、金色の帯と「保護者」の文字でひと目で分かるようにする */
+  .parent-on { background: #d4af37 !important; color: #3a2c00 !important; border-radius: 999px; }
+  .parent-label { font-size: 13px; font-weight: bold; margin-left: 4px; vertical-align: middle; }
+
   /* Password dialog */
   .pw-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.4);
@@ -910,8 +916,8 @@
       <option :value="c.id" x-text="c.name"></option>
     </template>
   </select>
-  <button class="mobile-lock-btn" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
-    <span x-text="parentMode ? '🔓' : '🔒'"></span>
+  <button class="mobile-lock-btn" @click="toggleParentMode()" :class="parentMode && 'parent-on'">
+    <span x-text="parentMode ? '🔓' : '🔒'"></span><span class="parent-label" x-show="parentMode" x-cloak>保護者</span>
   </button>
 </div>
 
@@ -939,8 +945,8 @@
       <div class="nav-tab" :class="tab === 'admin' && 'active'" @click="openAdmin()" x-show="parentMode && !kidLocked">
         <span class="tab-icon">&#x2699;&#xFE0F;</span>管理
       </div>
-      <div class="nav-tab hide-mobile" @click="toggleParentMode()" :style="parentMode ? 'color:var(--accent)' : ''">
-        <span x-text="parentMode ? '🔓' : '🔒'"></span>
+      <div class="nav-tab hide-mobile" @click="toggleParentMode()" :class="parentMode && 'parent-on'">
+        <span x-text="parentMode ? '🔓' : '🔒'"></span><span class="parent-label" x-show="parentMode" x-cloak>保護者</span>
       </div>
     </div>
     <div class="child-switcher" x-show="!kidLocked">
