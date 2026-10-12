@@ -2,6 +2,7 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
@@ -470,6 +471,11 @@ _seed_gag_questions()
 _seed_ko_starter_questions()
 
 app = FastAPI(title="和文英訳トレーニング")
+
+# 応答を gzip で縮めて送る。Render では手前の配信網が縮めてくれていたが、
+# apps01 は Tailscale Funnel を通るだけで素のまま届くため、進み具合 (1.6MB) などが
+# 外のスマホで 10 秒かかっていた (2026-10-12 ゆめさんの「めちゃ重い」)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.include_router(questions.router)
 app.include_router(children.router)
