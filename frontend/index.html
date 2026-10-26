@@ -1957,10 +1957,19 @@ function app() {
       } catch (e) {}
     },
 
+    // 保護者の操作は 本体の側でも確かめる (2026-10-26)。保護者の印を見出しに付けて送る
+    //   登録済みの端末なら その端末の番号、この画面で合言葉を入れたなら その合言葉
+    parentHeaders() {
+      const h = {};
+      if (this.deviceRegistered && this.myDeviceId) h['X-Parent-Device'] = this.myDeviceId;
+      if (this._parentPw) h['X-Parent-Password'] = this._parentPw;
+      return h;
+    },
+
     async api(url, options = {}) {
       const res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json', ...options.headers },
         ...options,
+        headers: { 'Content-Type': 'application/json', ...this.parentHeaders(), ...options.headers },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Error' }));
@@ -2146,6 +2155,7 @@ function app() {
       if (this.parentMode) {
         this.parentMode = false;
         this.adminUnlocked = false;
+        this._parentPw = null;
         if (this.tab === 'scoring' || this.tab === 'admin') {
           this.tab = 'practice';
         }
@@ -2163,8 +2173,20 @@ function app() {
       this.$nextTick(() => this.$refs.pwField && this.$refs.pwField.focus());
     },
 
-    submitPassword() {
-      if (this.pwInput === '1234') {
+    async submitPassword() {
+      // 合言葉は本体で比べる (画面の中に合言葉を書いておかないため)
+      const pw = this.pwInput;
+      let ok = false;
+      try {
+        const r = await fetch('/api/parent-devices/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw }),
+        });
+        ok = r.ok;
+      } catch (e) {}
+      if (ok) {
+        this._parentPw = pw;
         this.parentMode = true;
         this.adminUnlocked = true;
         this.showPwDialog = false;
@@ -2683,7 +2705,7 @@ function app() {
       }
       for (const f of files) {
         const fd = new FormData();
-        fd.append('file', f);
+        fd.append('file', await this._shrinkPhoto(f));
         try {
           const res = await fetch(`/api/sessions/${this.currentSessionId}/photos`, { method: 'POST', body: fd });
           if (!res.ok) throw new Error('upload failed');
@@ -2692,6 +2714,30 @@ function app() {
         } catch (e) {
           alert('写真のアップロードに失敗しました: ' + e.message);
         }
+      }
+    },
+
+    // 送る前に写真を縮める (2026-10-26)
+    //   スマホの写真は 1 枚 3MB ほど。Claude は長い辺 1568 画素より大きい画像を自分で縮めてから読むので
+    //   ここで同じ大きさにしても 採点に使われる中身は変わらず 送る量だけが 1/6 から 1/10 になる
+    //   縮められないとき (古い端末など) は元の写真をそのまま送る
+    async _shrinkPhoto(file) {
+      const MAX = 1568;
+      try {
+        if (!file.type || !file.type.startsWith('image/')) return file;
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        const scale = Math.min(1, MAX / Math.max(bmp.width, bmp.height));
+        if (scale >= 1 && file.size < 1500000) { bmp.close && bmp.close(); return file; }
+        const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+        bmp.close && bmp.close();
+        const blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.88));
+        if (!blob || blob.size >= file.size) return file;
+        return new File([blob], (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+      } catch (e) {
+        return file;
       }
     },
 
@@ -3087,6 +3133,7 @@ function app() {
       try {
         const res = await fetch(`/api/questions/import?language=${this.lang}`, {
           method: 'POST',
+          headers: this.parentHeaders(),
           body: formData,
         });
         if (!res.ok) {

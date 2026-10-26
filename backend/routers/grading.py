@@ -26,6 +26,7 @@ from ..backup import backup_to_dropbox
 from ..bonus import get_points_per_clear as get_bonus_points
 from ..mail import send_escalation_notification, send_activity
 from ..push import notify_parents, notify_child
+from ..auth import require_parent
 from .photos import PHOTO_DIR
 
 router = APIRouter(tags=["grading"])
@@ -704,7 +705,7 @@ def list_awaiting(db: Session = Depends(get_db)):
     return result
 
 
-@router.post("/api/gradings/{grading_id}/parent-review")
+@router.post("/api/gradings/{grading_id}/parent-review", dependencies=[Depends(require_parent)])
 def parent_review(grading_id: int, body: ParentReviewBody, db: Session = Depends(get_db)):
     g = db.query(Grading).get(grading_id)
     if not g:
@@ -912,21 +913,38 @@ textarea {{ width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd;
     <button class="btn btn-ok" onclick="submit(true)">○ 正解として確定</button>
     <button class="btn btn-ng" onclick="submit(false)">× 不正解として確定</button>
   </div>
+  <div id="pwbox" style="display:none; margin-top:12px;">
+    <div class="label">保護者のパスワード（登録していない端末から開いたとき）</div>
+    <input id="pw" type="password" style="width:100%; padding:10px; font-size:16px; box-sizing:border-box;">
+  </div>
   <div id="msg" style="margin-top:12px; color:#2e7d32; font-weight:bold;"></div>
 </div>
 
 <script>
+// 確定は保護者だけの操作 (2026-10-26 から本体で確かめる)
+//   登録済みの保護者の端末なら その端末の番号で通る。ほかの端末 (メールのアプリの中など) では合言葉を入れてもらう
 async function submit(correct) {{
   const comment = document.getElementById('comment').value;
   const msg = document.getElementById('msg');
   msg.textContent = '送信中…';
   msg.style.color = '#666';
   try {{
+    const headers = {{ 'Content-Type': 'application/json' }};
+    let did = null;
+    try {{ did = localStorage.getItem('deviceId'); }} catch (e) {{}}
+    if (did) headers['X-Parent-Device'] = did;
+    const pw = document.getElementById('pw').value;
+    if (pw) headers['X-Parent-Password'] = pw;
     const res = await fetch('/api/gradings/{grading_id}/parent-review', {{
       method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
+      headers,
       body: JSON.stringify({{ final_correct: correct, comment: comment }}),
     }});
+    if (res.status === 401) {{
+      document.getElementById('pwbox').style.display = 'block';
+      document.getElementById('pw').focus();
+      throw new Error(pw ? 'パスワードが違います' : 'パスワードを入れて もう一度押してください');
+    }}
     if (!res.ok) throw new Error((await res.json()).detail || 'Error');
     const data = await res.json();
     const fmtPt = n => String(Math.round((+n || 0) * 100) / 100);
@@ -953,7 +971,7 @@ PRICE_OUTPUT_USD_PER_MTOK = 75.0
 USD_TO_JPY = 155.0
 
 
-@router.get("/api/admin/api-usage")
+@router.get("/api/admin/api-usage", dependencies=[Depends(require_parent)])
 def api_usage(db: Session = Depends(get_db)):
     """子供ごと・月ごとの採点回数・チャット往復・トークン・推定コスト"""
     children = db.query(Child).order_by(Child.id).all()
@@ -1012,7 +1030,7 @@ def api_usage(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/api/admin/disk-usage")
+@router.get("/api/admin/disk-usage", dependencies=[Depends(require_parent)])
 def disk_usage():
     """Render Persistent Disk (/data) の使用量"""
     import shutil

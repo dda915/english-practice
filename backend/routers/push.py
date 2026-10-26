@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db, now_jst
 from ..models import PushSubscription
 from ..push import get_public_key, notify_parents, notify_child
+from ..auth import require_parent
 
 router = APIRouter(prefix="/api/push", tags=["push"])
 
@@ -68,13 +69,13 @@ class TestBody(BaseModel):
     child_id: int | None = None
 
 
-@router.get("/subscriptions")
+@router.get("/subscriptions", dependencies=[Depends(require_parent)])
 def list_subscriptions(db: Session = Depends(get_db)):
     subs = db.query(PushSubscription).all()
     return [{"id": s.id, "user_type": s.user_type, "child_id": s.child_id, "endpoint": s.endpoint[:80] + "..."} for s in subs]
 
 
-@router.delete("/subscriptions/{sub_id}")
+@router.delete("/subscriptions/{sub_id}", dependencies=[Depends(require_parent)])
 def delete_subscription(sub_id: int, db: Session = Depends(get_db)):
     s = db.query(PushSubscription).get(sub_id)
     if s:
@@ -83,7 +84,7 @@ def delete_subscription(sub_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.get("/debug")
+@router.get("/debug", dependencies=[Depends(require_parent)])
 def debug_push():
     """VAPID設定の診断"""
     import os
@@ -102,7 +103,7 @@ def debug_push():
     }
 
 
-@router.post("/test")
+@router.post("/test", dependencies=[Depends(require_parent)])
 def test_push(body: TestBody, db: Session = Depends(get_db)):
     payload = {
         "title": "テスト通知",

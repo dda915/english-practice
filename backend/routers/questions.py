@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Question
+from ..auth import require_parent
 
 router = APIRouter(prefix="/api/questions", tags=["questions"])
 
@@ -21,7 +22,7 @@ class QuestionBody(BaseModel):
     language: str = "en"
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(require_parent)])
 def add_question(body: QuestionBody, db: Session = Depends(get_db)):
     lang = _norm_lang(body.language)
     existing = (
@@ -50,7 +51,7 @@ class QuestionPatch(BaseModel):
     english: str | None = None
 
 
-@router.patch("/{number}")
+@router.patch("/{number}", dependencies=[Depends(require_parent)])
 def update_question(number: int, body: QuestionPatch, language: str = "en", db: Session = Depends(get_db)):
     lang = _norm_lang(language)
     q = db.query(Question).filter(Question.number == number, Question.language == lang).first()
@@ -67,7 +68,7 @@ def update_question(number: int, body: QuestionPatch, language: str = "en", db: 
     return {"id": q.id, "number": q.number, "unit_number": q.unit_number, "japanese": q.japanese, "english": q.english, "language": q.language}
 
 
-@router.delete("/{number}")
+@router.delete("/{number}", dependencies=[Depends(require_parent)])
 def delete_question(number: int, language: str = "en", force: bool = False, db: Session = Depends(get_db)):
     from ..models import Answer, Grading, ChatMessage, Message
     lang = _norm_lang(language)
@@ -102,7 +103,7 @@ def list_questions(language: str | None = None, db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/import")
+@router.post("/import", dependencies=[Depends(require_parent)])
 async def import_csv(file: UploadFile = File(...), language: str = "en", db: Session = Depends(get_db)):
     if not file.filename.endswith(".csv"):
         raise HTTPException(400, "CSVファイルをアップロードしてください")

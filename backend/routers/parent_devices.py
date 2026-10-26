@@ -1,9 +1,10 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db, now_jst
 from ..models import ParentDevice
+from ..auth import require_parent, is_parent, password_ok
 
 router = APIRouter(prefix="/api/parent-devices", tags=["parent-devices"])
 
@@ -27,8 +28,23 @@ def check_device(body: CheckBody, db: Session = Depends(get_db)):
     return {"registered": False}
 
 
+class LoginBody(BaseModel):
+    password: str
+
+
+@router.post("/login")
+def login(body: LoginBody, request: Request):
+    # 合言葉は画面ではなく ここで比べる (画面に合言葉を書いておかないため)
+    if not password_ok(body.password, request):
+        raise HTTPException(401, "パスワードが違います")
+    return {"ok": True}
+
+
 @router.post("/register")
-def register_device(body: RegisterBody, db: Session = Depends(get_db)):
+def register_device(body: RegisterBody, request: Request, db: Session = Depends(get_db)):
+    # 登録した端末は 以後 合言葉なしで保護者になれるので 登録そのものに保護者の確かめが要る
+    if not is_parent(request, db):
+        raise HTTPException(401, "保護者の操作です。保護者モードに切り替えてください")
     name = (body.name or "").strip() or "無名の端末"
     d = db.query(ParentDevice).filter(ParentDevice.device_id == body.device_id).first()
     now = now_jst()
@@ -48,7 +64,7 @@ def register_device(body: RegisterBody, db: Session = Depends(get_db)):
     return {"id": d.id, "name": d.name}
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_parent)])
 def list_devices(db: Session = Depends(get_db)):
     devices = db.query(ParentDevice).order_by(ParentDevice.registered_at.desc()).all()
     return [
@@ -63,7 +79,7 @@ def list_devices(db: Session = Depends(get_db)):
     ]
 
 
-@router.delete("/{device_pk}")
+@router.delete("/{device_pk}", dependencies=[Depends(require_parent)])
 def delete_device(device_pk: int, db: Session = Depends(get_db)):
     d = db.query(ParentDevice).get(device_pk)
     if not d:

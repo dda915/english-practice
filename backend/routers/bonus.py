@@ -9,6 +9,7 @@ from ..database import get_db, now_jst, JST
 from ..models import Setting
 from ..bonus import is_bonus_time
 from ..line_bot import broadcast_line_message
+from ..auth import require_parent
 
 router = APIRouter(tags=["bonus"])
 
@@ -62,7 +63,7 @@ def bonus_status(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/api/bonus/toggle")
+@router.post("/api/bonus/toggle", dependencies=[Depends(require_parent)])
 def toggle_bonus(db: Session = Depends(get_db)):
     """ボーナスタイム（ポイント加算 + LINE配信）の停止/再開を切り替え"""
     current = _get_setting(db, "bonus_disabled", "0")
@@ -72,7 +73,7 @@ def toggle_bonus(db: Session = Depends(get_db)):
     return {"disabled": new_value == "1"}
 
 
-@router.post("/api/bonus/guerrilla")
+@router.post("/api/bonus/guerrilla", dependencies=[Depends(require_parent)])
 def start_guerrilla(req: GuerrillaRequest = GuerrillaRequest(), db: Session = Depends(get_db)):
     """ゲリラボーナスを開始（分数・ポイント指定可）"""
     now = now_jst()

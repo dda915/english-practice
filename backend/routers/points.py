@@ -6,6 +6,7 @@ from ..database import get_db, now_jst
 from ..models import PointLog, Child, Setting, ExchangeRequest
 from ..mail import send_exchange_notification, SITE_URL
 from ..backup import backup_to_dropbox
+from ..auth import require_parent
 from .settings import get_child_setting
 
 router = APIRouter(prefix="/api/children", tags=["points"])
@@ -134,7 +135,7 @@ def spend_points(child_id: int, body: SpendRequest, db: Session = Depends(get_db
     return {"ok": True, "description": desc}
 
 
-@router.post("/{child_id}/points/adjust")
+@router.post("/{child_id}/points/adjust", dependencies=[Depends(require_parent)])
 def adjust_points(child_id: int, body: AdjustRequest, db: Session = Depends(get_db)):
     """管理者がポイントを手動で加減する"""
     child = db.query(Child).get(child_id)
@@ -193,7 +194,7 @@ def list_exchange_requests(db: Session = Depends(get_db)):
     return result
 
 
-@router.put("/exchange-requests/{req_id}/fulfill")
+@router.put("/exchange-requests/{req_id}/fulfill", dependencies=[Depends(require_parent)])
 def fulfill_request(req_id: int, db: Session = Depends(get_db)):
     """リクエストを対応済みにする（ポイント減算もここで実行）"""
     req = db.query(ExchangeRequest).get(req_id)

@@ -6,6 +6,7 @@ from sqlalchemy import func
 from ..database import get_db
 from ..models import Child, Answer, Question, PointLog, ActiveSession, SessionPhoto, Grading, GradingBatch, ChatMessage, Message, Setting
 from ..mail import send_activity
+from ..auth import require_parent
 from .photos import PHOTO_DIR
 from .settings import get_child_setting, get_child_setting_by_id
 
@@ -48,7 +49,7 @@ def get_child_by_code(code: str, db: Session = Depends(get_db)):
     return {"id": child.id, "name": child.name, "round": child.round or 1, "round_ko": child.round_ko or 1}
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(require_parent)])
 def add_child(body: ChildUpdate, db: Session = Depends(get_db)):
     import secrets
     from .settings import _global
@@ -66,7 +67,7 @@ def add_child(body: ChildUpdate, db: Session = Depends(get_db)):
     return {"id": child.id, "name": child.name, "round": child.round or 1, "access_code": child.access_code}
 
 
-@router.put("/{child_id}")
+@router.put("/{child_id}", dependencies=[Depends(require_parent)])
 def update_child(child_id: int, body: ChildUpdate, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
     if not child:
@@ -543,7 +544,7 @@ class NewRoundBody(BaseModel):
     start_position: int = 1  # 何問目から始めるか（1 = 先頭から＝完全な復習）
 
 
-@router.post("/{child_id}/new-round")
+@router.post("/{child_id}/new-round", dependencies=[Depends(require_parent)])
 def start_new_round(
     child_id: int,
     language: str = "en",
@@ -586,7 +587,7 @@ def start_new_round(
     }
 
 
-@router.put("/{child_id}/round")
+@router.put("/{child_id}/round", dependencies=[Depends(require_parent)])
 def set_round(child_id: int, body: SetRoundBody, language: str = "en", db: Session = Depends(get_db)):
     """ラウンドを直接指定（管理用）"""
     child = db.query(Child).get(child_id)

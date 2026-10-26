@@ -1,5 +1,5 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -7,6 +7,7 @@ from ..database import get_db, now_jst
 from ..models import Child, Question, Message
 from ..push import notify_parents, notify_child
 from ..mail import send_notification, send_activity, SITE_URL
+from ..auth import is_parent
 
 router = APIRouter(tags=["messages"])
 
@@ -48,7 +49,10 @@ def list_messages(child_id: int, question_id: int | None = None, db: Session = D
 
 
 @router.post("/api/children/{child_id}/messages")
-def create_message(child_id: int, body: MessageCreate, db: Session = Depends(get_db)):
+def create_message(child_id: int, body: MessageCreate, request: Request, db: Session = Depends(get_db)):
+    # お父さんとして送れるのは保護者だけ (子どもの画面から sender=parent で送られないように)
+    if body.sender == "parent" and not is_parent(request, db):
+        raise HTTPException(401, "保護者の操作です。保護者モードに切り替えてください")
     child = db.query(Child).get(child_id)
     if not child:
         raise HTTPException(404, "子供が見つかりません")

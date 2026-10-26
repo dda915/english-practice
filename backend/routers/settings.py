@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Setting, Child
+from ..auth import require_parent
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -76,7 +77,7 @@ def get_settings(db: Session = Depends(get_db)):
     }
 
 
-@router.put("")
+@router.put("", dependencies=[Depends(require_parent)])
 def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
     if body.exchange_rate_money is not None:
         _set_setting(db, "exchange_rate_money", str(body.exchange_rate_money))
@@ -114,7 +115,7 @@ def get_child_settings(child_id: int, db: Session = Depends(get_db)):
     return _serialize_child_settings(db, child)
 
 
-@child_router.put("/{child_id}/settings")
+@child_router.put("/{child_id}/settings", dependencies=[Depends(require_parent)])
 def update_child_settings(child_id: int, body: ChildSettingsUpdate, db: Session = Depends(get_db)):
     child = db.query(Child).get(child_id)
     if not child:

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from ..database import get_db, now_jst
 from ..models import LineFriend
+from ..auth import require_parent
 
 router = APIRouter(tags=["line"])
 
@@ -51,7 +52,7 @@ async def line_webhook(request: Request, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.get("/api/line/friends")
+@router.get("/api/line/friends", dependencies=[Depends(require_parent)])
 def list_friends(db: Session = Depends(get_db)):
     friends = db.query(LineFriend).order_by(LineFriend.id).all()
     return [
@@ -60,7 +61,7 @@ def list_friends(db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/api/line/test")
+@router.post("/api/line/test", dependencies=[Depends(require_parent)])
 def test_send():
     """テスト送信（振り返りメッセージ）"""
     from ..daily_review import send_daily_review
@@ -68,7 +69,7 @@ def test_send():
     return {"ok": True, "detail": result}
 
 
-@router.post("/api/line/test-simple")
+@router.post("/api/line/test-simple", dependencies=[Depends(require_parent)])
 def test_simple():
     """固定メッセージで直接broadcast（切り分け用）"""
     from ..line_bot import broadcast_line_message
