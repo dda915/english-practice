@@ -8,7 +8,7 @@
     "${TS_CERT_DOMAIN}:443": {
       "Handlers": {
         "/": {
-          "Proxy": "http://paepae:8000"
+          "Proxy": "http://paepae-app:8000"
         }
       }
     }
