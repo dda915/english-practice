@@ -3,7 +3,7 @@
 # ts  … PaePae 専用の Tailscale の窓口 (端末名 paepae)。Funnel で https://paepae.tail3daacc.ts.net/ を外に出す
 #        なぜ専用の窓口か: apps01 自身の 443 は依頼者向けの shiryo、Funnel の 8443 は置き場 (okiba) が使っている。
 #        相乗りすると依頼者向けの設定を触ることになり、ポート番号付きの URL だと Android アプリ (TWA) の確認が通らないおそれがある
-# app … PaePae 本体 (FastAPI)。外へはポートを開けず、ts からだけ届く
+# paepae … PaePae 本体 (FastAPI)。外へはポートを開けず、ts と 資料シェアの nginx からだけ届く
 services:
   ts:
     image: tailscale/tailscale:stable
@@ -21,7 +21,7 @@ services:
       - ./serve.json:/config/serve.json:ro
     restart: unless-stopped
 
-  app:
+  paepae:
     build:
       context: ./app
       dockerfile: deploy/apps01/Dockerfile
@@ -33,3 +33,16 @@ services:
     volumes:
       - ./data:/data
     restart: unless-stopped
+    # 外からの入口は 資料シェアの nginx (shiryo-web) の paepae.kawasaki-asuka.com (2026-10-26)
+    #   Funnel は Tailscale の中継所を挟むので 外から開くと 1 枚 2 秒から 8 秒かかっていた
+    #   nginx から名前で届くように 資料シェアの網 (shiryo_default) にも入る
+    #   ★サービス名を app にしない。あの網では app が資料シェアの本体の名前で、
+    #     同じ名前で入ると docs の nginx が PaePae へ渡してしまうおそれがある
+    networks:
+      - default
+      - shiryo
+
+networks:
+  shiryo:
+    external: true
+    name: shiryo_default

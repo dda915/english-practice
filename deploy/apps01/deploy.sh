@@ -6,6 +6,6 @@ set -eu
 cd /opt/paepae
 git -C app pull --ff-only
 cp app/deploy/apps01/docker-compose.yml app/deploy/apps01/serve.json .
-GIT_COMMIT=$(git -C app rev-parse HEAD) docker compose up -d --build
+GIT_COMMIT=$(git -C app rev-parse HEAD) docker compose up -d --build --remove-orphans
 docker image prune -f >/dev/null
 docker compose ps
